@@ -236,7 +236,8 @@ def translate_stream():
     def generate():
         try:
             response = client.chat.completions.create(
-                model="chutes/deepseek-ai/DeepSeek-V3-0324",
+                response = client.chat.completions.create(
+                model="0df3133d-c477-56d2-b4db-f2093bb150a1",  # <--- Using the exact Chute ID
                 messages=[
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": f"Text to process:\n\n{chapter.content}"}
