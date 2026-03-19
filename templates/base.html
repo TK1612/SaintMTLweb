@@ -2,62 +2,223 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>EPUB Reader</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaintMTLweb</title>
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 0; background-color: #f9f9f9; color: #333;}
-        .toolbar {
-            display: flex; justify-content: space-between; align-items: center;
-            background: #fff; padding: 10px 20px; border-bottom: 1px solid #ddd;
+        /* Dark Mode & Layout Variables */
+        :root {
+            --bg-color: #121212;
+            --box-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --border-color: #333333;
+            --primary-btn: #0d6efd;
+            --primary-hover: #0b5ed7;
         }
-        .active-users { font-size: 14px; color: #555; }
-        .user-menu { position: relative; display: inline-block; cursor: pointer; }
-        .dropdown-content {
-            display: none; position: absolute; right: 0; background-color: #fff;
-            min-width: 160px; box-shadow: 0px 8px 16px rgba(0,0,0,0.2); z-index: 1000;
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
         }
-        .user-menu:hover .dropdown-content { display: block; }
-        .dropdown-content a, .dropdown-content div {
-            color: black; padding: 12px 16px; text-decoration: none; display: block;
+
+        /* Navbar Styling */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: var(--box-bg);
+            border-bottom: 1px solid var(--border-color);
         }
-        .dropdown-content a:hover, .dropdown-content div:hover { background-color: #f1f1f1; }
-        .container { padding: 20px; max-width: 900px; margin: auto; }
+
+        .navbar-left {
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            position: relative;
+        }
+
+        .profile-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        .profile-pic {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid var(--border-color);
+        }
+
+        /* Custom Dropdown for Edit Profile / Modify Prompt */
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 45px;
+            right: 0;
+            background-color: var(--box-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            overflow: hidden;
+            z-index: 1000;
+        }
+
+        .profile-container:hover .dropdown-menu {
+            display: block;
+        }
+
+        .dropdown-menu a {
+            display: block;
+            padding: 10px 20px;
+            color: var(--text-color);
+            text-decoration: none;
+            white-space: nowrap;
+            font-size: 14px;
+        }
+
+        .dropdown-menu a:hover {
+            background-color: #2a2a2a;
+        }
+
+        /* Container Box Layout */
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .box {
+            background-color: var(--box-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .box h3 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        /* Inputs & Buttons */
+        input[type="file"], input[type="text"], input[type="password"], select {
+            background-color: #2a2a2a;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+
+        button, .btn {
+            background-color: var(--primary-btn);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+        }
+
+        button:hover, .btn:hover {
+            background-color: var(--primary-hover);
+        }
         
-        /* Modal Styles */
-        #profileModal { display:none; position:fixed; top:20%; left:50%; transform:translate(-50%, 0); background:#fff; padding:20px; border-radius:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index:1001; width: 400px; }
-        #modalOverlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; }
+        .btn-secondary {
+            background-color: #444;
+            color: var(--text-color);
+        }
+        
+        .btn-secondary:hover {
+            background-color: #555;
+        }
+
+        .bookmark-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .bookmark-item:last-child {
+            border-bottom: none;
+        }
+
+        .bookmark-details p {
+            margin: 2px 0;
+            font-size: 14px;
+        }
+
+        .bookmark-details .subtext {
+            color: #aaa;
+            font-size: 12px;
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .container {
+                margin: 20px 15px;
+                padding: 0;
+            }
+            .navbar {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+            .dropdown-menu {
+                right: 50%;
+                transform: translateX(50%);
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="toolbar">
-        <div class="active-users">Current Users Active: {{ active_count | default(1) }}</div>
-        {% if current_user.is_authenticated %}
-        <div class="user-menu">
-            <span>{{ current_user.username }} <strong>&#8942;</strong></span>
-            <div class="dropdown-content">
-                <div onclick="document.getElementById('profileModal').style.display='block'; document.getElementById('modalOverlay').style.display='block';">Edit Profile / Prompt</div>
-                {% if current_user.is_admin %}
-                <a href="{{ url_for('admin') }}" style="color: red; font-weight: bold;">Site Controls</a>
-                {% endif %}
-                <a href="{{ url_for('logout') }}">Logout</a>
+
+    <div class="navbar">
+        <div class="navbar-left">
+            Current Users Active: {{ active_users_count | default(1) }}
+        </div>
+        <div class="navbar-right">
+            <div class="profile-container">
+                <img src="{{ url_for('static', filename='default_profile.png') }}" alt="Profile" class="profile-pic">
+                <span>{{ current_user.username | default('thanhdeptrai101') }} &#8942;</span>
+                
+                <div class="dropdown-menu">
+                    <a href="{{ url_for('edit_profile') }}">Edit Profile</a>
+                    <a href="{{ url_for('modify_prompt') }}">Modify Prompt</a>
+                    
+                    {% if current_user.is_admin %}
+                    <a href="{{ url_for('admin_dashboard') }}" style="border-top: 1px solid var(--border-color);">Admin Panel</a>
+                    {% endif %}
+                    
+                    <a href="{{ url_for('logout') }}">Logout</a>
+                </div>
             </div>
         </div>
-        {% endif %}
     </div>
-
-    {% if current_user.is_authenticated %}
-    <div id="modalOverlay" onclick="this.style.display='none'; document.getElementById('profileModal').style.display='none';"></div>
-    <div id="profileModal">
-        <h3>Modify Prompt</h3>
-        <form method="POST" action="/profile">
-            <textarea name="custom_prompt" rows="5" style="width:100%;" placeholder="Leave blank to use default system prompt.">{{ current_user.custom_prompt or '' }}</textarea><br><br>
-            <button type="submit">Save</button>
-            <button type="button" onclick="document.getElementById('modalOverlay').style.display='none'; document.getElementById('profileModal').style.display='none';">Cancel</button>
-        </form>
-    </div>
-    {% endif %}
 
     <div class="container">
         {% block content %}{% endblock %}
     </div>
+
 </body>
 </html>
