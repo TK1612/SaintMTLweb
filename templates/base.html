@@ -115,7 +115,7 @@
         }
 
         /* Inputs & Buttons */
-        input[type="file"], input[type="text"], input[type="password"], select {
+        input[type="file"], input[type="text"], input[type="password"], select, textarea {
             background-color: #2a2a2a;
             color: var(--text-color);
             border: 1px solid var(--border-color);
@@ -207,7 +207,7 @@
                     <a href="{{ url_for('modify_prompt') }}">Modify Prompt</a>
                     
                     {% if current_user.is_admin %}
-                    <a href="{{ url_for('admin_dashboard') }}" style="border-top: 1px solid var(--border-color);">Admin Panel</a>
+                    <a href="{{ url_for('admin') }}" style="border-top: 1px solid var(--border-color);">Admin Panel</a>
                     {% endif %}
                     
                     <a href="{{ url_for('logout') }}">Logout</a>
