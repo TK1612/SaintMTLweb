@@ -1,7 +1,8 @@
 import os
 import time
+import json
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, Response, stream_with_context
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -23,9 +24,18 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 CHUTES_API_KEY = os.getenv("CHUTES_API_KEY")
-client = OpenAI(base_url="https://api.chutes.ai/v1", api_key=CHUTES_API_KEY)
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 
-# Active users tracker (in-memory)
+# Read the massive translation rules from prompt.txt
+try:
+    with open("prompt.txt", "r", encoding="utf-8") as f:
+        PRIVATE_PROMPT = f.read()
+except FileNotFoundError:
+    PRIVATE_PROMPT = "You are a literary assistant. Please translate this chapter into English."
+
+client = OpenAI(base_url="https://api.chutes.ai/v1", api_key=CHUTES_API_KEY)
+STATUS_FILE = "site_status.txt"
 active_users = {}
 
 # --- Database Models ---
@@ -34,24 +44,47 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(150), nullable=False)
     custom_prompt = db.Column(db.Text, nullable=True)
+    is_admin = db.Column(db.Boolean, default=False)
     bookmarks = db.relationship('Bookmark', backref='user', lazy=True)
+
+class Book(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    raw_filename = db.Column(db.String(255), nullable=False)
+    translated_title = db.Column(db.String(255), nullable=False)
+    chapters = db.relationship('Chapter', backref='book', lazy=True, cascade="all, delete-orphan")
+
+class Chapter(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    book_id = db.Column(db.Integer, db.ForeignKey('book.id'), nullable=False)
+    chapter_number = db.Column(db.Integer, nullable=False)
+    chapter_title = db.Column(db.String(255), nullable=False)
+    content = db.Column(db.Text, nullable=False)
 
 class Bookmark(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    raw_filename = db.Column(db.String(255), nullable=False)
-    html_name = db.Column(db.String(255), nullable=False)
-    chapter_title = db.Column(db.String(255), nullable=False)
+    book_id = db.Column(db.Integer, db.ForeignKey('book.id'), nullable=False)
+    current_chapter_number = db.Column(db.Integer, nullable=False, default=1)
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+def is_offline():
+    if not os.path.exists(STATUS_FILE):
+        return False
+    with open(STATUS_FILE, "r") as f:
+        return f.read().strip() == "offline"
+
 @app.before_request
 def track_active_users():
+    if is_offline() and request.endpoint not in ['admin', 'login', 'static']:
+        if not (current_user.is_authenticated and current_user.is_admin):
+            return "<h1>The website is currently offline. Please check back later.</h1>", 503
+
     if current_user.is_authenticated:
         active_users[current_user.username] = time.time()
-    # Clean up inactive users (e.g., no activity for 5 minutes)
+    
     current_time = time.time()
     for user in list(active_users.keys()):
         if current_time - active_users[user] > 300:
@@ -64,12 +97,16 @@ def signup():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        user = User.query.filter_by(username=username).first()
-        if user:
+        if User.query.filter_by(username=username).first():
             flash('Username already exists.')
             return redirect(url_for('signup'))
             
-        new_user = User(username=username, password=generate_password_hash(password, method='pbkdf2:sha256'))
+        is_user_admin = True if username == ADMIN_USERNAME else False
+        new_user = User(
+            username=username, 
+            password=generate_password_hash(password, method='pbkdf2:sha256'),
+            is_admin=is_user_admin
+        )
         db.session.add(new_user)
         db.session.commit()
         login_user(new_user)
@@ -86,7 +123,7 @@ def login():
         if user and check_password_hash(user.password, password):
             login_user(user)
             return redirect(url_for('index'))
-        flash('Please check your login details and try again.')
+        flash('Invalid credentials.')
     return render_template('login.html')
 
 @app.route('/logout')
@@ -100,15 +137,13 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    active_count = len(active_users)
     bookmarks = Bookmark.query.filter_by(user_id=current_user.id).all()
-    return render_template("index.html", active_count=active_count, bookmarks=bookmarks)
+    return render_template("index.html", active_count=len(active_users), bookmarks=bookmarks)
 
 @app.route("/profile", methods=['POST'])
 @login_required
 def update_profile():
-    new_prompt = request.form.get('custom_prompt')
-    current_user.custom_prompt = new_prompt
+    current_user.custom_prompt = request.form.get('custom_prompt')
     db.session.commit()
     return redirect(url_for('index'))
 
@@ -116,60 +151,106 @@ def update_profile():
 @login_required
 def upload():
     if 'file' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+        return jsonify({"error": "No file"}), 400
     
     file = request.files['file']
     raw_filename = file.filename
     
-    # Translate book title
     try:
         translated_title = GoogleTranslator(source='auto', target='en').translate(raw_filename)
     except:
         translated_title = raw_filename
     
+    new_book = Book(raw_filename=raw_filename, translated_title=translated_title)
+    db.session.add(new_book)
+    db.session.commit()
+
     filepath = f"temp_{raw_filename}"
     file.save(filepath)
-    
     book = epub.read_epub(filepath)
-    chapters = []
     
+    chapter_num = 1
     for item in book.get_items():
         if item.get_type() == epub.ITEM_DOCUMENT:
             soup = BeautifulSoup(item.get_content(), 'html.parser')
             text = soup.get_text(separator='\n').strip()
             if len(text) > 200:
-                html_name = item.get_name()
-                # Use a rough chapter title extraction or default
-                chapter_title = f"Chapter {len(chapters) + 1}" 
+                chap = Chapter(book_id=new_book.id, chapter_number=chapter_num, chapter_title=f"Chapter {chapter_num}", content=text)
+                db.session.add(chap)
+                chapter_num += 1
                 
-                chapters.append({
-                    "text": text,
-                    "html_name": html_name,
-                    "chapter_title": chapter_title
-                })
-                
-                # Save Bookmark with Raw Name
-                new_bookmark = Bookmark(
-                    user_id=current_user.id,
-                    raw_filename=raw_filename,
-                    html_name=html_name,
-                    chapter_title=chapter_title
-                )
-                db.session.add(new_bookmark)
-                
+    # Create initial bookmark
+    new_bookmark = Bookmark(user_id=current_user.id, book_id=new_book.id, current_chapter_number=1)
+    db.session.add(new_bookmark)
     db.session.commit()
     os.remove(filepath)
     
-    return jsonify({"chapters": chapters, "translated_title": translated_title})
+    return jsonify({"success": True})
 
-@app.route("/read")
+@app.route("/read/<int:book_id>/<int:chapter_num>")
 @login_required
-def read():
-    # Pass dummy data for the reader UI rendering, in a real scenario you pass specific chapter text
-    active_count = len(active_users)
-    return render_template("reader.html", active_count=active_count)
+def read(book_id, chapter_num):
+    book = Book.query.get_or_404(book_id)
+    chapter = Chapter.query.filter_by(book_id=book_id, chapter_number=chapter_num).first_or_404()
+    
+    # Update Bookmark
+    bm = Bookmark.query.filter_by(user_id=current_user.id, book_id=book_id).first()
+    if bm:
+        bm.current_chapter_number = chapter_num
+        db.session.commit()
+
+    total_chapters = Chapter.query.filter_by(book_id=book_id).count()
+    return render_template("reader.html", active_count=len(active_users), book=book, chapter=chapter, total=total_chapters)
+
+@app.route("/api/translate", methods=["POST"])
+@login_required
+def translate_stream():
+    data = request.json
+    chapter_id = data.get('chapter_id')
+    chapter = Chapter.query.get(chapter_id)
+    
+    prompt = current_user.custom_prompt if current_user.custom_prompt else PRIVATE_PROMPT
+
+    def generate():
+        try:
+            response = client.chat.completions.create(
+                model="deepseek-ai/DeepSeek-V3-0324",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": f"Text to process:\n\n{chapter.content}"}
+                ],
+                temperature=0.7,
+                stream=True
+            )
+            tokens = 0
+            for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    text = chunk.choices[0].delta.content
+                    tokens += 1 # Rough token proxy
+                    yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
+            yield f"data: {json.dumps({'text': '', 'tokens': tokens, 'status': 'Completed'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+
+@app.route("/admin", methods=["GET", "POST"])
+@login_required
+def admin():
+    if not current_user.is_admin:
+        return "Unauthorized", 403
+    if request.method == "POST":
+        if request.form.get("password") == ADMIN_PASSWORD:
+            with open(STATUS_FILE, "w") as f:
+                f.write(request.form.get("status"))
+            return redirect(url_for("admin"))
+    return render_template("admin.html", status="offline" if is_offline() else "online")
+
+
+# --- FIX FOR 500 SERVER ERROR ON RENDER ---
+# This ensures the database tables are created when Gunicorn spins up the app
+with app.app_context():
+    db.create_all()
 
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all() # Creates the database tables
     app.run(debug=True, port=5000)
