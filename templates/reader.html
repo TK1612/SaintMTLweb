@@ -10,6 +10,12 @@
     .reader-content { 
         max-width: 800px; margin: 40px auto; font-size: 18px; line-height: 1.8; white-space: pre-wrap;
     }
+    
+    /* Ensure paragraph margins look good */
+    .reader-content p {
+        margin-bottom: 1.5em;
+    }
+
     .status-banner {
         max-width: 800px; margin: 20px auto; padding: 10px; background: #f1f8ff; border: 1px solid #c8e1ff; 
         border-radius: 6px; font-size: 14px; color: #0366d6; text-align: center; font-family: monospace;
@@ -74,12 +80,13 @@
     const chapterId = {{ chapter.id }};
     const textContainer = document.getElementById('textContent');
     const statusBanner = document.getElementById('statusBanner');
-    let currentStream = null;
 
     async function startTranslation() {
-        // Reset view
-        textContainer.innerText = "";
+        // Reset view for rendering HTML
+        textContainer.innerHTML = "";
         statusBanner.innerText = "Status: Connecting... / Tokens used: 0";
+        
+        let accumulatedHtml = ""; // Holds the raw HTML stream
         
         try {
             const response = await fetch('/api/translate', {
@@ -108,9 +115,14 @@
                                     statusBanner.innerText = `Status: Error - ${data.error}`;
                                     return;
                                 }
-                                textContainer.innerText += data.text;
+                                
+                                // Inject raw HTML tags directly into the browser
+                                accumulatedHtml += data.text;
+                                textContainer.innerHTML = accumulatedHtml; 
+                                
                                 statusBanner.innerText = `Status: ${data.status} / Tokens used: ${data.tokens}`;
                                 
+                                // (Auto-scroll deliberately removed so you can read without interruptions)
                             } catch (e) {
                                 console.error("Error parsing chunk", e);
                             }
