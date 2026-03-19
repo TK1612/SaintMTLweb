@@ -4,27 +4,30 @@
 <style>
     /* Light Mode Overrides */
     body.light-theme {
-        --bg-color: #f4f4f9;
-        --box-bg: #ffffff;
-        --text-color: #000000;
-        --border-color: #dddddd;
+        --bg-color: #ffffff;
+        --box-bg: #f9f9f9;
+        --text-color: #333333;
+        --border-color: #eeeeee;
     }
     
     body.light-theme .circle-btn {
-        background-color: #e0e0e0;
-        color: #000000;
-        border-color: #cccccc;
+        background-color: #ffffff;
+        color: #333333;
+        border-color: #dddddd;
     }
 
     body.light-theme .circle-btn:hover {
-        background-color: #d0d0d0;
+        background-color: #eeeeee;
     }
     
+    /* Clean, open reader style (No Box) */
     .reader-container {
-        font-size: 18px;
-        line-height: 1.8;
-        padding: 30px;
-        margin-bottom: 100px;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        font-size: 19px; /* Slightly larger for readability */
+        line-height: 2.0; /* Spacious line height */
+        margin-bottom: 120px; /* Space for the bottom toolbar */
     }
 
     /* Make images responsive */
@@ -32,37 +35,38 @@
         max-width: 100%;
         height: auto;
         border-radius: 8px;
-        margin: 15px 0;
+        margin: 20px 0;
+        display: block;
     }
 
     /* Status Box Styling */
     .status-box {
         background-color: var(--box-bg);
         border: 1px solid var(--border-color);
-        padding: 12px 20px;
+        padding: 10px 15px;
         border-radius: 8px;
-        margin-bottom: 25px;
+        margin-bottom: 30px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: bold;
         transition: all 0.3s ease;
     }
 
     .raw-text {
         color: #888;
-        font-size: 14px;
-        margin-bottom: 20px;
-        padding: 15px;
-        background-color: rgba(0,0,0,0.2);
+        font-size: 15px;
+        margin-bottom: 30px;
+        padding: 20px;
+        background-color: rgba(0,0,0,0.1);
         border-radius: 8px;
         display: none;
     }
 
     body.light-theme .raw-text {
-        background-color: rgba(0,0,0,0.05);
-        color: #555;
+        background-color: #f4f4f4;
+        color: #666;
     }
 
     /* Bottom Navigation Toolbar */
@@ -78,14 +82,14 @@
         align-items: center;
         padding: 15px 30px;
         z-index: 100;
-        box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
+        box-shadow: 0 -4px 15px rgba(0,0,0,0.1);
     }
 
     .nav-group { display: flex; gap: 15px; align-items: center; }
     
     .chapter-info { text-align: center; display: flex; flex-direction: column; }
     
-    .chapter-info .subtext { color: #aaa; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+    .chapter-info .subtext { color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
 
     .circle-btn {
         width: 45px;
@@ -104,19 +108,18 @@
     }
 
     .circle-btn:hover { background-color: #3a3a3a; }
-
     .circle-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 
     @media (max-width: 768px) {
         .bottom-toolbar { padding: 10px 15px; }
-        .circle-btn { width: 35px; height: 35px; font-size: 16px; }
+        .circle-btn { width: 38px; height: 38px; font-size: 16px; }
         .chapter-info { font-size: 14px; }
-        .status-box { flex-direction: column; gap: 10px; text-align: center; }
+        .chapter-info strong { display: none; } /* Hide book title on small screens to save space */
     }
 </style>
 
-<div class="box reader-container">
-    <h2>{{ chapter.chapter_title }}</h2>
+<div class="reader-container">
+    <h2 style="margin-bottom: 25px;">{{ chapter.chapter_title }}</h2>
     
     <div id="statusBox" class="status-box">
         <div>Status: <span id="statusText" style="color: #a855f7;">Waiting to Start...</span></div>
@@ -127,10 +130,10 @@
         {{ chapter.content | safe }}
     </div>
 
-    <button onclick="toggleRaw()" class="btn-secondary" style="margin-bottom: 20px; font-size: 12px; padding: 5px 10px;">Show/Hide Raw Korean</button>
+    <button onclick="toggleRaw()" class="btn-secondary" style="margin-bottom: 30px; font-size: 12px; padding: 6px 12px;">Show/Hide Raw Korean</button>
     <div id="rawDisplay" class="raw-text"></div>
 
-    <div id="translationOutput" style="min-height: 200px;"></div>
+    <div id="translationOutput" style="min-height: 400px;"></div>
 </div>
 
 <div class="bottom-toolbar">
@@ -147,7 +150,7 @@
     </div>
 
     <div class="nav-group">
-        <button id="retranslateBtn" class="circle-btn" title="Retranslate">↻</button>
+        <button id="retranslateBtn" class="circle-btn" title="Retranslate (Click to cancel and restart)">↻</button>
         <button id="themeToggleBtn" class="circle-btn" title="Toggle Light/Dark Mode">☽</button>
         
         <a href="{% if chapter.chapter_number < total %}{{ url_for('read', book_id=book.id, chapter_num=chapter.chapter_number + 1) }}{% else %}#{% endif %}" 
@@ -186,26 +189,30 @@
     const translationOutput = document.getElementById('translationOutput');
     const retranslateBtn = document.getElementById('retranslateBtn');
     
-    // Status Box Elements
     const statusBox = document.getElementById('statusBox');
     const statusText = document.getElementById('statusText');
     const tokenCount = document.getElementById('tokenCount');
 
-    let isTranslating = false;
+    // NEW: AbortController allows us to cancel ongoing translations
+    let fetchController = null;
 
     async function startTranslation() {
-        if (isTranslating) return;
-        isTranslating = true;
-        retranslateBtn.classList.add('disabled');
+        // If a translation is already running, kill it!
+        if (fetchController) {
+            fetchController.abort();
+        }
         
-        // Reset Status Box
+        // Create a new controller for this attempt
+        fetchController = new AbortController();
+        const signal = fetchController.signal;
+        
+        // Reset UI
         statusBox.style.backgroundColor = 'var(--box-bg)';
         statusBox.style.borderColor = 'var(--border-color)';
-        statusText.style.color = '#a855f7'; // Purple for active
+        statusText.style.color = '#a855f7';
         statusText.innerText = 'Translating...';
         tokenCount.innerText = '0';
         
-        // Use a buffer string so we don't break HTML tags by inserting them piece-by-piece
         let fullTranslationText = ""; 
         translationOutput.innerHTML = ""; 
         
@@ -213,7 +220,8 @@
             const response = await fetch("{{ url_for('translate_stream') }}", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chapter_id: {{ chapter.id }} })
+                body: JSON.stringify({ chapter_id: {{ chapter.id }} }),
+                signal: signal // Attach the kill switch
             });
             
             const reader = response.body.getReader();
@@ -233,18 +241,15 @@
                             try {
                                 const data = JSON.parse(dataStr);
                                 
-                                // Buffer the text and update safely to prevent broken DOM tags
                                 if (data.text) {
                                     fullTranslationText += data.text;
                                     translationOutput.innerHTML = fullTranslationText;
                                 }
                                 
-                                // Update Status and Tokens dynamically
                                 if (data.tokens) tokenCount.innerText = data.tokens;
                                 if (data.status) {
                                     statusText.innerText = data.status;
                                     if (data.status === 'Completed') {
-                                        // Turn the box green!
                                         statusBox.style.backgroundColor = 'rgba(74, 222, 128, 0.1)';
                                         statusBox.style.borderColor = '#4ade80';
                                         statusText.style.color = '#4ade80';
@@ -262,16 +267,24 @@
                 }
             }
         } catch (error) {
-            statusText.innerText = "Connection Failed";
-            statusText.style.color = '#f87171';
-            translationOutput.innerHTML += `<br><br><span style="color:#f87171">Connection failed. Please refresh.</span>`;
+            // Check if the error was just us cancelling the stream
+            if (error.name === 'AbortError') {
+                console.log('Previous translation aborted.');
+            } else {
+                statusText.innerText = "Connection Failed";
+                statusText.style.color = '#f87171';
+                translationOutput.innerHTML += `<br><br><span style="color:#f87171">Connection failed. Please refresh.</span>`;
+            }
         } finally {
-            isTranslating = false;
-            retranslateBtn.classList.remove('disabled');
+            // Clear the controller when finished natively
+            if (fetchController && fetchController.signal.aborted === false && statusText.innerText === 'Completed') {
+                 fetchController = null;
+            }
         }
     }
 
     window.addEventListener('DOMContentLoaded', startTranslation);
+    // Retranslate button is no longer disabled, it will trigger startTranslation (which aborts the old one)
     retranslateBtn.addEventListener('click', startTranslation);
 </script>
 {% endblock %}
