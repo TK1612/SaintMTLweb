@@ -2,14 +2,13 @@ import os
 import time
 import json
 import traceback
-import ebooklib
-from ebooklib import epub
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, Response, stream_with_context
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
 from openai import OpenAI
@@ -70,7 +69,7 @@ class Bookmark(db.Model):
     book_id = db.Column(db.Integer, db.ForeignKey('book.id'), nullable=False)
     current_chapter_number = db.Column(db.Integer, nullable=False, default=1)
     
-    # NEW: This line connects the Bookmark to the Book so the dashboard can read the title!
+    # This connects the Bookmark to the Book so the dashboard can read the title
     book = db.relationship('Book', backref='bookmarks')
 
 @login_manager.user_loader
@@ -236,13 +235,12 @@ def translate_stream():
     def generate():
         try:
             response = client.chat.completions.create(
-                response = client.chat.completions.create(
-                model="0df3133d-c477-56d2-b4db-f2093bb150a1",  # <--- Using the exact Chute ID
+                model="0df3133d-c477-56d2-b4db-f2093bb150a1",
                 messages=[
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": f"Text to process:\n\n{chapter.content}"}
                 ],
-                temperature=0.3,
+                temperature=0.7,
                 stream=True
             )
             tokens = 0
