@@ -203,7 +203,7 @@
         </div>
         <div class="navbar-right">
             <div class="profile-container">
-                <img src="{{ url_for('static', filename='default_profile.png') }}" alt="Profile" class="profile-pic">
+                <img src="{{ url_for('static', filename=current_user.profile_pic if current_user.profile_pic else 'default_profile.png') }}" alt="Profile" class="profile-pic">
                 <span>{{ current_user.username | default('thanhdeptrai101') }} &#8942;</span>
                 
                 <div class="dropdown-menu">
