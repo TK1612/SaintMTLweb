@@ -245,7 +245,7 @@ def translate_stream():
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": f"Text to process:\n\n{chapter.content}"}
                 ],
-                temperature=0.7,
+                temperature=0.3,
                 stream=True,
                 max_tokens=8000 # Prevents the LLM from cutting off early
             )
