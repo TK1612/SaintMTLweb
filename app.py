@@ -299,13 +299,17 @@ def translate_stream():
 
     def generate():
         try:
+            # NEW: The Qwen Sledgehammer. We attach this directly to the user's text.
+            qwen_enforcer = "\n\n[CRITICAL SYSTEM COMMAND: Output ONLY the translated HTML. DO NOT output your thought process, reasoning, or any preamble. The very first character of your response MUST be '<'. Start translating immediately.]"
+            
             response = client.chat.completions.create(
                 model="Qwen/Qwen3-14B",
                 messages=[
                     {"role": "system", "content": prompt},
-                    {"role": "user", "content": f"Text to process:\n\n{chapter.content}"}
+                    # Appended the enforcer right to the end of the text
+                    {"role": "user", "content": f"Text to process:\n\n{chapter.content}{qwen_enforcer}"}
                 ],
-                temperature=0.3,
+                temperature=0.1, # Lowered from 0.3 to kill creative preambles
                 stream=True,
                 max_tokens=8000 
             )
