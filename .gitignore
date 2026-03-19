@@ -205,3 +205,14 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+# --- Custom App Additions ---
+
+# CRITICAL: Never upload your secrets
+.env
+
+# Ignore uploaded and processed books
+*.epub
+temp_*
+
+# Ignore the local site status tracker
+site_status.txt
