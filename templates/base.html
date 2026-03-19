@@ -45,11 +45,15 @@
             position: relative;
         }
 
+        /* Fixed Profile Container */
         .profile-container {
             display: flex;
             align-items: center;
             gap: 10px;
             cursor: pointer;
+            position: relative; /* Anchors the dropdown to this exact container */
+            padding-bottom: 15px; /* Creates the invisible bridge for your mouse */
+            margin-bottom: -15px; /* Keeps your navbar layout from stretching */
         }
 
         .profile-pic {
@@ -60,11 +64,11 @@
             border: 1px solid var(--border-color);
         }
 
-        /* Custom Dropdown for Edit Profile / Modify Prompt */
+        /* Fixed Dropdown Menu */
         .dropdown-menu {
             display: none;
             position: absolute;
-            top: 45px;
+            top: 100%; /* Automatically attaches directly to the bottom of the container */
             right: 0;
             background-color: var(--box-bg);
             border: 1px solid var(--border-color);
