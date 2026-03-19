@@ -2,6 +2,8 @@ import os
 import time
 import json
 import traceback
+import ebooklib
+from ebooklib import epub
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, Response, stream_with_context
 from flask_sqlalchemy import SQLAlchemy
