@@ -3,12 +3,21 @@
 {% block content %}
 <div class="box">
     <h2>Edit Profile</h2>
-    <p style="color: #aaa; margin-bottom: 20px;">Update your account password.</p>
+    <p style="color: #aaa; margin-bottom: 20px;">Update your account password and profile picture.</p>
     
-    <form action="{{ url_for('edit_profile') }}" method="POST">
+    <form action="{{ url_for('edit_profile') }}" method="POST" enctype="multipart/form-data">
+        
         <div style="margin-bottom: 15px;">
-            <label for="new_password" style="display: block; margin-bottom: 8px;">New Password:</label>
-            <input type="password" id="new_password" name="new_password" required>
+            <label style="display: block; margin-bottom: 8px;">Profile Picture:</label>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <img src="{{ url_for('static', filename=current_user.profile_pic if current_user.profile_pic else 'default_profile.png') }}" alt="Current Profile" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color);">
+                <input type="file" name="profile_pic" accept="image/*" style="flex-grow: 1; margin-bottom: 0;">
+            </div>
+        </div>
+
+        <div style="margin-bottom: 25px;">
+            <label for="new_password" style="display: block; margin-bottom: 8px;">New Password (leave blank to keep current):</label>
+            <input type="password" id="new_password" name="new_password">
         </div>
         
         <button type="submit" class="btn">Save Changes</button>
