@@ -37,6 +37,7 @@ try:
 except FileNotFoundError:
     PRIVATE_PROMPT = "You are a literary assistant. Please translate this chapter into English."
 
+# Use the dedicated LLM endpoint for Chutes
 client = OpenAI(base_url="https://llm.chutes.ai/v1", api_key=CHUTES_API_KEY)
 STATUS_FILE = "site_status.txt"
 active_users = {}
@@ -68,8 +69,6 @@ class Bookmark(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     book_id = db.Column(db.Integer, db.ForeignKey('book.id'), nullable=False)
     current_chapter_number = db.Column(db.Integer, nullable=False, default=1)
-    
-    # This connects the Bookmark to the Book so the dashboard can read the title
     book = db.relationship('Book', backref='bookmarks')
 
 @login_manager.user_loader
@@ -177,13 +176,19 @@ def upload():
         
         new_book = Book(raw_filename=raw_filename, translated_title=translated_title)
         db.session.add(new_book)
-        db.session.flush() # Securely generates the book.id for the chapters below
+        db.session.flush()
         
         chapter_num = 1
         for item in book.get_items():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 soup = BeautifulSoup(item.get_content(), 'html.parser')
-                text = soup.get_text(separator='\n').strip()
+                
+                # PRESERVE RAW HTML TAGS
+                body = soup.find('body')
+                if body:
+                    text = body.decode_contents().strip()
+                else:
+                    text = soup.get_text(separator='\n').strip()
                 
                 if len(text) > 200:
                     chap = Chapter(book_id=new_book.id, chapter_number=chapter_num, chapter_title=f"Chapter {chapter_num}", content=text)
@@ -235,14 +240,14 @@ def translate_stream():
     def generate():
         try:
             response = client.chat.completions.create(
-                model="deepseek-ai/DeepSeek-V3-0324-TEE",  # <--- EXACT REGISTERED NAME
+                model="deepseek-ai/DeepSeek-V3-0324-TEE", # Exact required router name
                 messages=[
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": f"Text to process:\n\n{chapter.content}"}
                 ],
-                temperature=0.3,
-                stream=True
-                max_tokens=10000
+                temperature=0.7,
+                stream=True,
+                max_tokens=8000 # Prevents the LLM from cutting off early
             )
             tokens = 0
             for chunk in response:
