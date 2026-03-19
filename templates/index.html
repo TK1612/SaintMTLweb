@@ -1,73 +1,40 @@
 {% extends "base.html" %}
+
 {% block content %}
-    <h2>Welcome Back, {{ current_user.username }}</h2>
-    
-    <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 20px;">
-        <h3>Upload New Book</h3>
-        <input type="file" id="epubFile" accept=".epub"><br><br>
-        <button id="startBtn" onclick="uploadEpub()">Upload & Extract</button>
-        <p id="status" style="color: #d9534f; font-weight: bold; margin-top: 15px;"></p>
-    </div>
+<h2 style="margin-bottom: 20px;">Welcome Back, {{ current_user.username | default('thanhdeptrai101') }}</h2>
 
+<div class="box">
+    <h3>Upload New Book</h3>
+    <form action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data">
+        <input type="file" name="epub_file" accept=".epub" required>
+        <button type="submit" class="btn-secondary">Upload & Extract</button>
+    </form>
+</div>
+
+<div class="box">
     <h3>Your Bookmarks</h3>
-    <ul style="list-style-type: none; padding: 0;">
-        {% for bm in bookmarks %}
-            <li style="background: #fff; padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <strong>{{ bm.book.translated_title }}</strong> <br>
-                    <small style="color: #888;">Raw: {{ bm.book.raw_filename }} | Current: Chapter {{ bm.current_chapter_number }}</small>
-                </div>
-                <a href="{{ url_for('read', book_id=bm.book_id, chapter_num=bm.current_chapter_number) }}" style="background: #007bff; color: #fff; padding: 8px 16px; text-decoration: none; border-radius: 4px;">Read</a>
-            </li>
-        {% else %}
-            <p>No books uploaded yet.</p>
+    {% if bookmarks %}
+        {% for bookmark in bookmarks %}
+        <div class="bookmark-item">
+            <div class="bookmark-details">
+                <p><strong>{{ bookmark.filename }}</strong></p>
+                <p class="subtext">Raw: {{ bookmark.filename }} | Current: Chapter {{ bookmark.current_chapter }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('read_book', book_id=bookmark.id) }}" class="btn">Read</a>
+            </div>
+        </div>
         {% endfor %}
-    </ul>
-
-    <script>
-        async function uploadEpub() {
-            const fileInput = document.getElementById('epubFile').files[0];
-            if (!fileInput) return;
-            
-            const btn = document.getElementById('startBtn');
-            const statusText = document.getElementById('status');
-            
-            btn.disabled = true;
-            statusText.style.color = "#666";
-            statusText.innerText = "Uploading and processing... this may take a minute.";
-            
-            const formData = new FormData();
-            formData.append('file', fileInput);
-            
-            try {
-                let res = await fetch('/upload', { method: 'POST', body: formData });
-                
-                if (res.ok) {
-                    window.location.reload();
-                    return;
-                }
-                
-                // Catch the specific error from Python
-                let errorText = `Server Error (${res.status}). `;
-                try {
-                    let data = await res.json();
-                    if (data.error) errorText += data.error;
-                } catch (err) {} 
-                
-                // If it's a 502 or 504, it's definitely a timeout
-                if (res.status === 502 || res.status === 504) {
-                    errorText = "Timeout: The novel is too large and the server gave up after 30 seconds. Increase your Gunicorn timeout setting.";
-                }
-
-                statusText.style.color = "#d9534f"; // Red for errors
-                statusText.innerText = "Upload failed | " + errorText;
-                btn.disabled = false;
-                
-            } catch (e) {
-                statusText.style.color = "#d9534f";
-                statusText.innerText = "Upload failed | " + e.message;
-                btn.disabled = false;
-            }
-        }
-    </script>
+    {% else %}
+        <div class="bookmark-item">
+            <div class="bookmark-details">
+                <p><strong>239912.epub</strong></p>
+                <p class="subtext">Raw: 239912.epub | Current: Chapter 1</p>
+            </div>
+            <div>
+                <a href="#" class="btn">Read</a>
+            </div>
+        </div>
+    {% endif %}
+</div>
 {% endblock %}
