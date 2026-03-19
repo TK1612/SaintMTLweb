@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="box">
+    <h2>Edit Profile</h2>
+    <p style="color: #aaa; margin-bottom: 20px;">Update your account password.</p>
+    
+    <form action="{{ url_for('edit_profile') }}" method="POST">
+        <div style="margin-bottom: 15px;">
+            <label for="new_password" style="display: block; margin-bottom: 8px;">New Password:</label>
+            <input type="password" id="new_password" name="new_password" required>
+        </div>
+        
+        <button type="submit" class="btn">Save Changes</button>
+        <a href="{{ url_for('index') }}" class="btn-secondary" style="margin-left: 10px;">Cancel</a>
+    </form>
+</div>
+{% endblock %}
