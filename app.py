@@ -242,6 +242,7 @@ def translate_stream():
                 ],
                 temperature=0.3,
                 stream=True
+                max_tokens=10000
             )
             tokens = 0
             for chunk in response:
