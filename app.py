@@ -21,6 +21,9 @@ app.secret_key = os.urandom(24)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# --- ADDED: 100MB Upload Limit ---
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024 
+
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
