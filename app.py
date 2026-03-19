@@ -179,7 +179,7 @@ def upload():
         
         chapter_num = 1
         for item in book.get_items():
-            if item.get_type() == epub.ITEM_DOCUMENT:
+            if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 soup = BeautifulSoup(item.get_content(), 'html.parser')
                 text = soup.get_text(separator='\n').strip()
                 
