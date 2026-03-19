@@ -29,7 +29,7 @@
                 <p class="subtext">Raw: {{ bookmark.book.raw_filename }} | Current: Chapter {{ bookmark.current_chapter_number }}</p>
             </div>
             <div>
-                <a href="{{ url_for('read', book_id=bookmark.book_id, chapter_num=bookmark.current_chapter_number) }}" class="btn">Read</a>
+                <a href="{{ url_for('book_details', book_id=bookmark.book_id) }}" class="btn">Details</a>
             </div>
         </div>
         {% endfor %}
