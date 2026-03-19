@@ -111,8 +111,6 @@
                                 textContainer.innerText += data.text;
                                 statusBanner.innerText = `Status: ${data.status} / Tokens used: ${data.tokens}`;
                                 
-                                // Auto-scroll to bottom as text arrives
-                                window.scrollTo(0, document.body.scrollHeight);
                             } catch (e) {
                                 console.error("Error parsing chunk", e);
                             }
