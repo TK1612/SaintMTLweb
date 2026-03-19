@@ -4,3 +4,7 @@ python-dotenv==1.0.1
 openai==1.55.3
 Flask==3.0.0
 gunicorn==21.2.0
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Werkzeug==3.0.1
+deep-translator==1.11.4
