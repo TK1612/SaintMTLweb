@@ -37,7 +37,7 @@ try:
 except FileNotFoundError:
     PRIVATE_PROMPT = "You are a literary assistant. Please translate this chapter into English."
 
-client = OpenAI(base_url="https://api.chutes.ai/v1", api_key=CHUTES_API_KEY)
+client = OpenAI(base_url="https://llm.chutes.ai/v1", api_key=CHUTES_API_KEY)
 STATUS_FILE = "site_status.txt"
 active_users = {}
 
@@ -235,12 +235,12 @@ def translate_stream():
     def generate():
         try:
             response = client.chat.completions.create(
-                model="0df3133d-c477-56d2-b4db-f2093bb150a1",
+                model="deepseek-ai/DeepSeek-V3-0324-TEE",  # <--- EXACT REGISTERED NAME
                 messages=[
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": f"Text to process:\n\n{chapter.content}"}
                 ],
-                temperature=0.7,
+                temperature=0.3,
                 stream=True
             )
             tokens = 0
