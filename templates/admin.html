@@ -1,1 +1,20 @@
-
+<!DOCTYPE html>
+<html>
+<body>
+    <h2>Admin Dashboard</h2>
+    <p>Current Status: <strong>{{ status }}</strong></p>
+    
+    <form method="POST">
+        <label>Admin Password:</label>
+        <input type="password" name="password" required><br><br>
+        
+        <label>Set Website State:</label>
+        <select name="status">
+            <option value="online">Online (Active)</option>
+            <option value="offline">Offline (Disabled)</option>
+        </select><br><br>
+        
+        <button type="submit">Update Status</button>
+    </form>
+</body>
+</html>
