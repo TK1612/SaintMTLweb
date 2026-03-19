@@ -69,6 +69,9 @@ class Bookmark(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     book_id = db.Column(db.Integer, db.ForeignKey('book.id'), nullable=False)
     current_chapter_number = db.Column(db.Integer, nullable=False, default=1)
+    
+    # NEW: This line connects the Bookmark to the Book so the dashboard can read the title!
+    book = db.relationship('Book', backref='bookmarks')
 
 @login_manager.user_loader
 def load_user(user_id):
