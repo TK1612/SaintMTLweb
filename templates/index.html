@@ -1,1 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+    <h2>Welcome Back, {{ current_user.username }}</h2>
+    
+    <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 20px;">
+        <h3>Upload New Book</h3>
+        <input type="file" id="epubFile" accept=".epub"><br><br>
+        <button id="startBtn" onclick="uploadEpub()">Upload & Extract</button>
+        <p id="status" style="color: #666;"></p>
+    </div>
 
+    <h3>Your Bookmarks</h3>
+    <ul style="list-style-type: none; padding: 0;">
+        {% for bm in bookmarks %}
+            <li style="background: #fff; padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>{{ bm.book.translated_title }}</strong> <br>
+                    <small style="color: #888;">Raw: {{ bm.book.raw_filename }} | Current: Chapter {{ bm.current_chapter_number }}</small>
+                </div>
+                <a href="{{ url_for('read', book_id=bm.book_id, chapter_num=bm.current_chapter_number) }}" style="background: #007bff; color: #fff; padding: 8px 16px; text-decoration: none; border-radius: 4px;">Read</a>
+            </li>
+        {% else %}
+            <p>No books uploaded yet.</p>
+        {% endfor %}
+    </ul>
+
+    <script>
+        async function uploadEpub() {
+            const fileInput = document.getElementById('epubFile').files[0];
+            if (!fileInput) return;
+            const btn = document.getElementById('startBtn');
+            btn.disabled = true;
+            document.getElementById('status').innerText = "Uploading and processing... please wait.";
+            
+            const formData = new FormData();
+            formData.append('file', fileInput);
+            
+            let res = await fetch('/upload', { method: 'POST', body: formData });
+            if (res.ok) {
+                window.location.reload();
+            } else {
+                document.getElementById('status').innerText = "Upload failed.";
+                btn.disabled = false;
+            }
+        }
+    </script>
+{% endblock %}
