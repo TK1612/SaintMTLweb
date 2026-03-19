@@ -42,9 +42,83 @@
     {% endif %}
 </div>
 
+{% if usage_stats.has_subscription %}
+<div class="box" style="background-color: #0d1117; border-color: #30363d; margin-top: 25px;">
+    <h3 style="margin-top: 0; margin-bottom: 5px; border-bottom: none; padding-bottom: 0; color: #ffffff;">Subscription Usage</h3>
+    <p style="color: #8b949e; font-size: 14px; margin-top: 0; margin-bottom: 25px;">Your subscription spending limits. Usage beyond these caps is charged at pay-as-you-go rates.</p>
+    
+    <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 250px;">
+            <div style="margin-bottom: 15px;">
+                <strong style="display: flex; align-items: center; gap: 8px; color: #ffffff;">
+                    <span style="color: #6ee7b7;">⚡</span> Billing Cycle Cap
+                </strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px;">
+                <span style="color: #8b949e;">Used</span>
+                <strong style="color: #ffffff;">${{ "%.3f"|format(usage_stats.cycle_used) }} / ${{ "%.3f"|format(usage_stats.cycle_limit) }}</strong>
+            </div>
+            <div style="width: 100%; height: 8px; background-color: #21262d; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+                <div style="height: 100%; background-color: #6ee7b7; width: {{ usage_stats.cycle_percent }}%;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                <span style="color: #484f58;">{{ usage_stats.cycle_percent }}% used</span>
+                <span style="color: #6ee7b7;">${{ "%.3f"|format(usage_stats.cycle_remaining) }} remaining</span>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <div style="flex: 1; background-color: #21262d; padding: 15px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 18px; font-weight: bold; color: #ffffff;">${{ "%.3f"|format(usage_stats.cycle_used) }}</div>
+                    <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">Cycle Used</div>
+                </div>
+                <div style="flex: 1; background-color: #21262d; padding: 15px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 18px; font-weight: bold; color: #6ee7b7;">${{ "%.3f"|format(usage_stats.cycle_remaining) }}</div>
+                    <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">Cycle Remaining</div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="flex: 1; min-width: 250px;">
+            <div style="margin-bottom: 15px;">
+                <strong style="display: flex; align-items: center; gap: 8px; color: #ffffff;">
+                    <span style="color: #818cf8;">🕒</span> 4-Hour Window
+                </strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px;">
+                <span style="color: #8b949e;">Used</span>
+                <strong style="color: #ffffff;">${{ "%.6f"|format(usage_stats.window_used) }} / ${{ "%.4f"|format(usage_stats.window_limit) }}</strong>
+            </div>
+            <div style="width: 100%; height: 8px; background-color: #21262d; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+                <div style="height: 100%; background-color: #818cf8; width: {{ usage_stats.window_percent }}%;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                <span style="color: #484f58;">{{ usage_stats.window_percent }}% used</span>
+                <span style="color: #6ee7b7;">${{ "%.4f"|format(usage_stats.window_remaining) }} remaining</span>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <div style="flex: 1; background-color: #21262d; padding: 15px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 18px; font-weight: bold; color: #ffffff;">${{ "%.6f"|format(usage_stats.window_used) }}</div>
+                    <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">4-Hr Used</div>
+                </div>
+                <div style="flex: 1; background-color: #21262d; padding: 15px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 18px; font-weight: bold; color: #818cf8;">${{ "%.4f"|format(usage_stats.window_remaining) }}</div>
+                    <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">4-Hr Remaining</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="box" style="margin-top: 25px; text-align: center;">
+    <h3 style="margin-bottom: 15px;">Gallery</h3>
+    <img src="{{ url_for('static', filename='__nirvatia_punishing_gray_raven_drawn_by_t_tac0__e8ec3974f8f0baa04cec46bca2f25338.jpg') }}" alt="Mascot Image" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+</div>
+
 <script>
 document.getElementById('uploadForm').addEventListener('submit', function(e) {
-    e.preventDefault(); // Stops the browser from leaving the page
+    e.preventDefault();
 
     const fileInput = document.getElementById('fileInput');
     const uploadBtn = document.getElementById('uploadBtn');
@@ -54,7 +128,6 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
 
     if (fileInput.files.length === 0) return;
 
-    // Lock the button and show the progress bar
     uploadBtn.disabled = true;
     uploadBtn.style.backgroundColor = '#555';
     uploadBtn.innerText = 'Processing...';
@@ -68,7 +141,6 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', "{{ url_for('upload') }}", true);
 
-    // Track the upload progress
     xhr.upload.onprogress = function(e) {
         if (e.lengthComputable) {
             let percentComplete = Math.round((e.loaded / e.total) * 100);
@@ -76,14 +148,12 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
             progressText.innerText = `Uploading: ${percentComplete}%`;
 
             if (percentComplete === 100) {
-                // Upload is done, now we wait for Python to extract the chapters
-                progressBar.style.backgroundColor = '#a855f7'; // Turn purple
-                progressText.innerText = "Upload complete! Extracting chapters (this may take a few minutes for large files)...";
+                progressBar.style.backgroundColor = '#a855f7';
+                progressText.innerText = "Upload complete! Extracting chapters...";
             }
         }
     };
 
-    // When the Python server finishes and sends a response back
     xhr.onload = function() {
         if (xhr.status === 200) {
             let response;
@@ -95,11 +165,11 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
 
             if (response.success) {
                 progressText.innerText = "Done! Refreshing...";
-                progressBar.style.backgroundColor = '#4ade80'; // Turn green
-                window.location.reload(); // Automatically reload to show the new book!
+                progressBar.style.backgroundColor = '#4ade80';
+                window.location.reload();
             } else {
                 progressText.innerText = "Error: " + (response.error || "Extraction failed.");
-                progressBar.style.backgroundColor = '#f87171'; // Turn red
+                progressBar.style.backgroundColor = '#f87171';
                 uploadBtn.disabled = false;
                 uploadBtn.innerText = 'Upload & Extract';
             }
@@ -109,7 +179,7 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
                 errorMsg = JSON.parse(xhr.responseText).error || errorMsg;
             } catch(e) {}
             progressText.innerText = "Error: " + errorMsg;
-            progressBar.style.backgroundColor = '#f87171'; // Turn red
+            progressBar.style.backgroundColor = '#f87171';
             uploadBtn.disabled = false;
             uploadBtn.innerText = 'Upload & Extract';
         }
@@ -122,7 +192,6 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
         uploadBtn.innerText = 'Upload & Extract';
     };
 
-    // Send the file to Python
     xhr.send(formData);
 });
 </script>
