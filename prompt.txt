@@ -245,11 +245,10 @@ Every opening <p> tag MUST have a corresponding closing </p> tag.
 Do not leave tags unclosed. 
 Do not modify, fracture, or typo the tags themselves (e.g., < p> or p> is forbidden).
 
-═══════════════════════════════════════════════════
-END OF TRANSLATION SYSTEM PROMPT
-═══════════════════════════════════════════════════
-
 Treat HTML tags as immutable containers. Translate ONLY the text inside them.
 Example: <p>Untranslated Korean</p> → <p>Translated English</p>
 
 You must process the input until the final </html> tag is reached.
+═══════════════════════════════════════════════════
+END OF TRANSLATION SYSTEM PROMPT
+═══════════════════════════════════════════════════
