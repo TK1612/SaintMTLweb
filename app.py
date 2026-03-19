@@ -21,7 +21,7 @@ app.secret_key = os.urandom(24)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- ADDED: 100MB Upload Limit ---
+# 100MB Upload Limit
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024 
 
 db = SQLAlchemy(app)
@@ -146,14 +146,31 @@ def logout():
 @login_required
 def index():
     bookmarks = Bookmark.query.filter_by(user_id=current_user.id).all()
-    return render_template("index.html", active_count=len(active_users), bookmarks=bookmarks)
+    return render_template("index.html", active_users_count=len(active_users), bookmarks=bookmarks)
 
-@app.route("/profile", methods=['POST'])
+# --- NEW: Edit Profile Route ---
+@app.route("/edit-profile", methods=['GET', 'POST'])
 @login_required
-def update_profile():
-    current_user.custom_prompt = request.form.get('custom_prompt')
-    db.session.commit()
-    return redirect(url_for('index'))
+def edit_profile():
+    if request.method == 'POST':
+        new_password = request.form.get('new_password')
+        if new_password:
+            current_user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
+            db.session.commit()
+            flash("Password updated successfully.")
+        return redirect(url_for('index'))
+    return render_template("edit_profile.html")
+
+# --- NEW: Modify Prompt Route ---
+@app.route("/modify-prompt", methods=['GET', 'POST'])
+@login_required
+def modify_prompt():
+    if request.method == 'POST':
+        current_user.custom_prompt = request.form.get('custom_prompt')
+        db.session.commit()
+        flash("Custom prompt updated successfully.")
+        return redirect(url_for('index'))
+    return render_template("modify_prompt.html")
 
 @app.route("/upload", methods=["POST"])
 @login_required
@@ -186,7 +203,6 @@ def upload():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 soup = BeautifulSoup(item.get_content(), 'html.parser')
                 
-                # PRESERVE RAW HTML TAGS
                 body = soup.find('body')
                 if body:
                     text = body.decode_contents().strip()
@@ -229,7 +245,7 @@ def read(book_id, chapter_num):
         db.session.commit()
 
     total_chapters = Chapter.query.filter_by(book_id=book_id).count()
-    return render_template("reader.html", active_count=len(active_users), book=book, chapter=chapter, total=total_chapters)
+    return render_template("reader.html", active_users_count=len(active_users), book=book, chapter=chapter, total=total_chapters)
 
 @app.route("/api/translate", methods=["POST"])
 @login_required
@@ -243,14 +259,14 @@ def translate_stream():
     def generate():
         try:
             response = client.chat.completions.create(
-                model="deepseek-ai/DeepSeek-V3-0324-TEE", # Exact required router name
+                model="deepseek-ai/DeepSeek-V3-0324-TEE",
                 messages=[
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": f"Text to process:\n\n{chapter.content}"}
                 ],
                 temperature=0.3,
                 stream=True,
-                max_tokens=8000 # Prevents the LLM from cutting off early
+                max_tokens=8000 
             )
             tokens = 0
             for chunk in response:
@@ -276,7 +292,6 @@ def admin():
             return redirect(url_for("admin"))
     return render_template("admin.html", status="offline" if is_offline() else "online")
 
-# Ensures the database tables are created when Gunicorn spins up
 with app.app_context():
     db.create_all()
 
