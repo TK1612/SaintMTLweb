@@ -6,7 +6,7 @@
         <h3>Upload New Book</h3>
         <input type="file" id="epubFile" accept=".epub"><br><br>
         <button id="startBtn" onclick="uploadEpub()">Upload & Extract</button>
-        <p id="status" style="color: #666;"></p>
+        <p id="status" style="color: #d9534f; font-weight: bold; margin-top: 15px;"></p>
     </div>
 
     <h3>Your Bookmarks</h3>
@@ -28,18 +28,44 @@
         async function uploadEpub() {
             const fileInput = document.getElementById('epubFile').files[0];
             if (!fileInput) return;
+            
             const btn = document.getElementById('startBtn');
+            const statusText = document.getElementById('status');
+            
             btn.disabled = true;
-            document.getElementById('status').innerText = "Uploading and processing... please wait.";
+            statusText.style.color = "#666";
+            statusText.innerText = "Uploading and processing... this may take a minute.";
             
             const formData = new FormData();
             formData.append('file', fileInput);
             
-            let res = await fetch('/upload', { method: 'POST', body: formData });
-            if (res.ok) {
-                window.location.reload();
-            } else {
-                document.getElementById('status').innerText = "Upload failed.";
+            try {
+                let res = await fetch('/upload', { method: 'POST', body: formData });
+                
+                if (res.ok) {
+                    window.location.reload();
+                    return;
+                }
+                
+                // Catch the specific error from Python
+                let errorText = `Server Error (${res.status}). `;
+                try {
+                    let data = await res.json();
+                    if (data.error) errorText += data.error;
+                } catch (err) {} 
+                
+                // If it's a 502 or 504, it's definitely a timeout
+                if (res.status === 502 || res.status === 504) {
+                    errorText = "Timeout: The novel is too large and the server gave up after 30 seconds. Increase your Gunicorn timeout setting.";
+                }
+
+                statusText.style.color = "#d9534f"; // Red for errors
+                statusText.innerText = "Upload failed | " + errorText;
+                btn.disabled = false;
+                
+            } catch (e) {
+                statusText.style.color = "#d9534f";
+                statusText.innerText = "Upload failed | " + e.message;
                 btn.disabled = false;
             }
         }
