@@ -350,50 +350,41 @@ def translate_stream():
     def generate():
         try:
             import re
+            # 1. Remove massive gaps between HTML tags to save tokens
             minified_html = re.sub(r'>\s+<', '><', chapter.content)
+            # 2. Strip excess whitespace at the start/end of lines
             minified_html = "\n".join([line.strip() for line in minified_html.splitlines() if line.strip()])
 
-            enforcer = (
-                "\n\n[CRITICAL INSTRUCTION: The text above may be a short notice, info page, or normal chapter. "
-                "Regardless of the content, you MUST translate it and output ONLY valid HTML. "
-                "Do NOT explain your thought process. Do NOT output 'Okay'. The VERY FIRST character must be '<'.]"
+            # COMPLETION FORCING: Frame as a fill-in-the-blank machine task, not a chat.
+            user_payload = (
+                f"Task: Direct HTML Translation.\n"
+                f"Rules: No preamble. No thinking. Output raw HTML only.\n\n"
+                f"--- SOURCE ---\n{minified_html}\n--- END SOURCE ---\n\n"
+                f"--- TRANSLATED HTML DIRECT OUTPUT ---\n"
             )
             
             response = client.chat.completions.create(
                 model="Qwen/Qwen3-14B",
                 messages=[
                     {"role": "system", "content": prompt},
-                    {"role": "user", "content": f"Translate this text:\n\n```html\n{minified_html}\n```\n{enforcer}"}
+                    {"role": "user", "content": user_payload}
                 ],
-                temperature=0.1, 
+                temperature=0.0, # 0.0 forces the model to act like a deterministic machine
                 stream=True,
                 max_tokens=8000 
             )
             
             tokens = 0
-            started_html = False
-            text_buffer = ""
-            
             for chunk in response:
                 if chunk.choices and chunk.choices[0].delta.content:
                     text = chunk.choices[0].delta.content
                     
+                    # Fallback strip just in case it tries to add markdown backticks
                     text = text.replace("```html", "").replace("```", "")
                     
-                    if not started_html:
-                        text_buffer += text
-                        html_start = text_buffer.find('<')
-                        
-                        if html_start != -1:
-                            started_html = True
-                            text = text_buffer[html_start:] 
-                            if text.strip(): 
-                                tokens += 1
-                                yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
-                    else:
-                        if text:
-                            tokens += 1 
-                            yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
+                    if text:
+                        tokens += 1 
+                        yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
                             
             yield f"data: {json.dumps({'text': '', 'tokens': tokens, 'status': 'Completed'})}\n\n"
         except Exception as e:
