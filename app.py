@@ -207,7 +207,69 @@ def upload():
         
         new_book = Book(raw_filename=raw_filename, translated_title=translated_title)
         db.session.add(new_book)
-        db.session.flush() # Flushes so we can get new_book.id for the cover filename
+        db.session.flush() # Flushes so we can get new_book.id
+        
+        # --- NEW: Extract ALL Images and rewrite paths ---
+        book_folder = os.path.join('static', f'book_{new_book.id}')
+        os.makedirs(book_folder, exist_ok=True)
+        
+        image_map = {}
+        for item in book.get_items():
+            if item.get_type() == ebooklib.ITEM_IMAGE or item.get_type() == ebooklib.ITEM_COVER:
+                safe_name = secure_filename(item.get_name().replace('/', '_'))
+                file_path = os.path.join(book_folder, safe_name)
+                with open(file_path, 'wb') as f:
+                    f.write(item.get_content())
+                
+                # Map the original EPUB path to the new web path
+                web_path = url_for('static', filename=f'book_{new_book.id}/{safe_name}')
+                image_map[item.get_name()] = web_path
+                
+                if item.get_type() == ebooklib.ITEM_COVER or 'cover' in item.get_name().lower():
+                    new_book.cover_image = f'book_{new_book.id}/{safe_name}'
+        
+        chapter_num = 1
+        for item in book.get_items():
+            if item.get_type() == ebooklib.ITEM_DOCUMENT:
+                soup = BeautifulSoup(item.get_content(), 'html.parser')
+                
+                # --- NEW: Fix broken image links by replacing with extracted paths ---
+                for img in soup.find_all('img'):
+                    src = img.get('src')
+                    if src:
+                        base_src_name = src.split('/')[-1]
+                        for orig_name, web_path in image_map.items():
+                            if orig_name.endswith(base_src_name):
+                                img['src'] = web_path
+                                break
+                
+                body = soup.find('body')
+                if body:
+                    text = body.decode_contents().strip()
+                else:
+                    text = soup.get_text(separator='\n').strip()
+                
+                if len(text) > 200:
+                    chap = Chapter(book_id=new_book.id, chapter_number=chapter_num, chapter_title=f"Chapter {chapter_num}", content=text)
+                    db.session.add(chap)
+                    chapter_num += 1
+                    
+        if chapter_num == 1:
+            raise Exception("No readable text found.")
+            
+        new_bookmark = Bookmark(user_id=current_user.id, book_id=new_book.id, current_chapter_number=1)
+        db.session.add(new_bookmark)
+        db.session.commit()
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"UPLOAD CRASHED: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if os.path.exists(filepath):
+            os.remove(filepath)
 
         # --- Extract Cover Image ---
         cover_image_filename = 'default_cover.png'
