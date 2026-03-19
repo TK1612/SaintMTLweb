@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="box">
+    <h2>Modify Custom Prompt</h2>
+    <p style="color: #aaa; margin-bottom: 20px;">Set a custom instruction for the LLM translation. Leave blank to use the default system prompt.</p>
+    
+    <form action="{{ url_for('modify_prompt') }}" method="POST">
+        <div style="margin-bottom: 15px;">
+            <label for="custom_prompt" style="display: block; margin-bottom: 8px;">Your Translation Rules:</label>
+            <textarea id="custom_prompt" name="custom_prompt" rows="8">{{ current_user.custom_prompt or '' }}</textarea>
+        </div>
+        
+        <button type="submit" class="btn">Update Prompt</button>
+        <a href="{{ url_for('index') }}" class="btn-secondary" style="margin-left: 10px;">Cancel</a>
+    </form>
+</div>
+{% endblock %}
