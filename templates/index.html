@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 style="margin-bottom: 20px;">Welcome Back, {{ current_user.username | default('thanhdeptrai101') }}</h2>
+<h2 style="margin-bottom: 20px;">Welcome Back, {{ current_user.username }}</h2>
 
 <div class="box">
     <h3>Upload New Book</h3>
-    <form action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data">
-        <input type="file" name="epub_file" accept=".epub" required>
+    <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".epub" required>
         <button type="submit" class="btn-secondary">Upload & Extract</button>
     </form>
 </div>
@@ -17,22 +17,18 @@
         {% for bookmark in bookmarks %}
         <div class="bookmark-item">
             <div class="bookmark-details">
-                <p><strong>{{ bookmark.filename }}</strong></p>
-                <p class="subtext">Raw: {{ bookmark.filename }} | Current: Chapter {{ bookmark.current_chapter }}</p>
+                <p><strong>{{ bookmark.book.translated_title }}</strong></p>
+                <p class="subtext">Raw: {{ bookmark.book.raw_filename }} | Current: Chapter {{ bookmark.current_chapter_number }}</p>
             </div>
             <div>
-                <a href="{{ url_for('read_book', book_id=bookmark.id) }}" class="btn">Read</a>
+                <a href="{{ url_for('read', book_id=bookmark.book_id, chapter_num=bookmark.current_chapter_number) }}" class="btn">Read</a>
             </div>
         </div>
         {% endfor %}
     {% else %}
         <div class="bookmark-item">
             <div class="bookmark-details">
-                <p><strong>239912.epub</strong></p>
-                <p class="subtext">Raw: 239912.epub | Current: Chapter 1</p>
-            </div>
-            <div>
-                <a href="#" class="btn">Read</a>
+                <p class="subtext">No books uploaded yet. Upload an EPUB to get started!</p>
             </div>
         </div>
     {% endif %}
