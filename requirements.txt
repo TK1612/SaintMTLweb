@@ -1,0 +1,6 @@
+EbookLib==0.18
+beautifulsoup4==4.12.3
+python-dotenv==1.0.1
+openai==1.55.3
+Flask==3.0.0
+gunicorn==21.2.0
