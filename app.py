@@ -235,13 +235,13 @@ def translate_stream():
 
     def generate():
         try:
-            response = client.chat.completions.create(
-                model="deepseek-ai/DeepSeek-V3-0324",
+response = client.chat.completions.create(
+                model="chutes/deepseek-ai/DeepSeek-V3-0324",  
                 messages=[
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": f"Text to process:\n\n{chapter.content}"}
                 ],
-                temperature=0.7,
+                temperature=0.3,
                 stream=True
             )
             tokens = 0
