@@ -20,9 +20,10 @@ app = Flask(__name__)
 app.secret_key = os.urandom(24)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# 100MB Upload Limit
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024 
+
+# Ensure static folder exists for uploads
+os.makedirs('static', exist_ok=True)
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -33,14 +34,12 @@ CHUTES_API_KEY = os.getenv("CHUTES_API_KEY")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 
-# Read the massive translation rules from prompt.txt
 try:
     with open("prompt.txt", "r", encoding="utf-8") as f:
         PRIVATE_PROMPT = f.read()
 except FileNotFoundError:
     PRIVATE_PROMPT = "You are a literary assistant. Please translate this chapter into English."
 
-# Use the dedicated LLM endpoint for Chutes
 client = OpenAI(base_url="https://llm.chutes.ai/v1", api_key=CHUTES_API_KEY)
 STATUS_FILE = "site_status.txt"
 active_users = {}
@@ -52,12 +51,16 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(150), nullable=False)
     custom_prompt = db.Column(db.Text, nullable=True)
     is_admin = db.Column(db.Boolean, default=False)
+    # NEW: Store profile picture filename
+    profile_pic = db.Column(db.String(255), default='default_profile.png') 
     bookmarks = db.relationship('Bookmark', backref='user', lazy=True)
 
 class Book(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     raw_filename = db.Column(db.String(255), nullable=False)
     translated_title = db.Column(db.String(255), nullable=False)
+    # NEW: Store cover image filename
+    cover_image = db.Column(db.String(255), default='default_cover.png') 
     chapters = db.relationship('Chapter', backref='book', lazy=True, cascade="all, delete-orphan")
 
 class Chapter(db.Model):
@@ -148,20 +151,28 @@ def index():
     bookmarks = Bookmark.query.filter_by(user_id=current_user.id).all()
     return render_template("index.html", active_users_count=len(active_users), bookmarks=bookmarks)
 
-# --- NEW: Edit Profile Route ---
 @app.route("/edit-profile", methods=['GET', 'POST'])
 @login_required
 def edit_profile():
     if request.method == 'POST':
+        # Handle Password
         new_password = request.form.get('new_password')
         if new_password:
             current_user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
-            db.session.commit()
-            flash("Password updated successfully.")
-        return redirect(url_for('index'))
-    return render_template("edit_profile.html")
+        
+        # Handle Profile Picture
+        if 'profile_pic' in request.files:
+            pic = request.files['profile_pic']
+            if pic.filename != '':
+                filename = secure_filename(f"user_{current_user.id}_{pic.filename}")
+                pic.save(os.path.join('static', filename))
+                current_user.profile_pic = filename
 
-# --- NEW: Modify Prompt Route ---
+        db.session.commit()
+        flash("Profile updated successfully.")
+        return redirect(url_for('index'))
+    return render_template("edit_profile.html", active_users_count=len(active_users))
+
 @app.route("/modify-prompt", methods=['GET', 'POST'])
 @login_required
 def modify_prompt():
@@ -170,7 +181,7 @@ def modify_prompt():
         db.session.commit()
         flash("Custom prompt updated successfully.")
         return redirect(url_for('index'))
-    return render_template("modify_prompt.html")
+    return render_template("modify_prompt.html", active_users_count=len(active_users))
 
 @app.route("/upload", methods=["POST"])
 @login_required
@@ -196,7 +207,18 @@ def upload():
         
         new_book = Book(raw_filename=raw_filename, translated_title=translated_title)
         db.session.add(new_book)
-        db.session.flush()
+        db.session.flush() # Flushes so we can get new_book.id for the cover filename
+
+        # --- Extract Cover Image ---
+        cover_image_filename = 'default_cover.png'
+        for item in book.get_items():
+            if item.get_type() == ebooklib.ITEM_COVER or (item.get_type() == ebooklib.ITEM_IMAGE and 'cover' in item.get_name().lower()):
+                ext = item.get_name().split('.')[-1]
+                cover_image_filename = f"cover_{new_book.id}.{ext}"
+                with open(os.path.join('static', cover_image_filename), 'wb') as f:
+                    f.write(item.get_content())
+                break
+        new_book.cover_image = cover_image_filename
         
         chapter_num = 1
         for item in book.get_items():
@@ -215,7 +237,7 @@ def upload():
                     chapter_num += 1
                     
         if chapter_num == 1:
-            raise Exception("No readable text found. The EPUB might be an image dump or improperly formatted.")
+            raise Exception("No readable text found.")
             
         new_bookmark = Bookmark(user_id=current_user.id, book_id=new_book.id, current_chapter_number=1)
         db.session.add(new_bookmark)
@@ -226,12 +248,22 @@ def upload():
     except Exception as e:
         db.session.rollback()
         print(f"UPLOAD CRASHED: {str(e)}")
-        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-        
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)
+
+# --- NEW: Book Details / TOC Page ---
+@app.route("/book/<int:book_id>")
+@login_required
+def book_details(book_id):
+    book = Book.query.get_or_404(book_id)
+    chapters = Chapter.query.filter_by(book_id=book_id).order_by(Chapter.chapter_number).all()
+    
+    bm = Bookmark.query.filter_by(user_id=current_user.id, book_id=book_id).first()
+    current_chapter = bm.current_chapter_number if bm else 1
+    
+    return render_template("book_details.html", active_users_count=len(active_users), book=book, chapters=chapters, current_chapter=current_chapter)
 
 @app.route("/read/<int:book_id>/<int:chapter_num>")
 @login_required
@@ -290,7 +322,7 @@ def admin():
             with open(STATUS_FILE, "w") as f:
                 f.write(request.form.get("status"))
             return redirect(url_for("admin"))
-    return render_template("admin.html", status="offline" if is_offline() else "online")
+    return render_template("admin.html", status="offline" if is_offline() else "online", active_users_count=len(active_users))
 
 with app.app_context():
     db.create_all()
