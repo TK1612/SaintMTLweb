@@ -6,22 +6,22 @@
     
     {% if current_user.is_admin %}
         <p style="margin-bottom: 25px;">Current Status: 
-            <strong style="color: {% if site_status == 'online' %}#4ade80{% else %}#f87171{% endif %};">
-                {{ site_status | default('online') }}
+            <strong style="color: {% if status == 'online' %}#4ade80{% else %}#f87171{% endif %};">
+                {{ status | default('online') | title }}
             </strong>
         </p>
 
-        <form action="{{ url_for('update_admin_status') }}" method="POST">
+        <form action="{{ url_for('admin') }}" method="POST">
             <div style="margin-bottom: 15px;">
                 <label for="admin_password" style="display: block; margin-bottom: 8px;">Admin Password:</label>
-                <input type="password" id="admin_password" name="admin_password" style="max-width: 300px;" required>
+                <input type="password" id="admin_password" name="password" style="max-width: 300px;" required>
             </div>
 
             <div style="margin-bottom: 20px;">
                 <label for="website_state" style="display: block; margin-bottom: 8px;">Set Website State:</label>
-                <select id="website_state" name="website_state" style="max-width: 150px;">
-                    <option value="Online">Online</option>
-                    <option value="Offline">Offline</option>
+                <select id="website_state" name="status" style="max-width: 150px;">
+                    <option value="online">Online</option>
+                    <option value="offline">Offline</option>
                 </select>
             </div>
 
@@ -34,7 +34,7 @@
     {% endif %}
     
     <div style="margin-top: 30px;">
-        <a href="{{ url_for('dashboard') }}" style="color: #a855f7; text-decoration: none;">&larr; Back to Dashboard</a>
+        <a href="{{ url_for('index') }}" style="color: #a855f7; text-decoration: none;">&larr; Back to Dashboard</a>
     </div>
 </div>
 {% endblock %}
