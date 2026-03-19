@@ -5,10 +5,18 @@
 
 <div class="box">
     <h3>Upload New Book</h3>
-    <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
-        <input type="file" name="file" accept=".epub" required>
-        <button type="submit" class="btn-secondary">Upload & Extract</button>
+    
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" id="fileInput" name="file" accept=".epub" required>
+        <button type="submit" id="uploadBtn" class="btn-secondary">Upload & Extract</button>
     </form>
+
+    <div id="progressContainer" style="display: none; margin-top: 15px;">
+        <div style="width: 100%; background-color: #2a2a2a; border-radius: 4px; border: 1px solid var(--border-color);">
+            <div id="progressBar" style="width: 0%; height: 20px; background-color: var(--primary-btn); border-radius: 3px; transition: width 0.2s;"></div>
+        </div>
+        <p id="progressText" style="text-align: center; margin-top: 8px; font-size: 14px; color: #aaa;">0%</p>
+    </div>
 </div>
 
 <div class="box">
@@ -33,4 +41,89 @@
         </div>
     {% endif %}
 </div>
+
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    e.preventDefault(); // Stops the browser from leaving the page
+
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+
+    if (fileInput.files.length === 0) return;
+
+    // Lock the button and show the progress bar
+    uploadBtn.disabled = true;
+    uploadBtn.style.backgroundColor = '#555';
+    uploadBtn.innerText = 'Processing...';
+    progressContainer.style.display = 'block';
+    progressBar.style.backgroundColor = 'var(--primary-btn)';
+    progressBar.style.width = '0%';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', "{{ url_for('upload') }}", true);
+
+    // Track the upload progress
+    xhr.upload.onprogress = function(e) {
+        if (e.lengthComputable) {
+            let percentComplete = Math.round((e.loaded / e.total) * 100);
+            progressBar.style.width = percentComplete + '%';
+            progressText.innerText = `Uploading: ${percentComplete}%`;
+
+            if (percentComplete === 100) {
+                // Upload is done, now we wait for Python to extract the chapters
+                progressBar.style.backgroundColor = '#a855f7'; // Turn purple
+                progressText.innerText = "Upload complete! Extracting chapters (this may take a few minutes for large files)...";
+            }
+        }
+    };
+
+    // When the Python server finishes and sends a response back
+    xhr.onload = function() {
+        if (xhr.status === 200) {
+            let response;
+            try {
+                response = JSON.parse(xhr.responseText);
+            } catch(err) {
+                response = {success: false, error: "Invalid server response."};
+            }
+
+            if (response.success) {
+                progressText.innerText = "Done! Refreshing...";
+                progressBar.style.backgroundColor = '#4ade80'; // Turn green
+                window.location.reload(); // Automatically reload to show the new book!
+            } else {
+                progressText.innerText = "Error: " + (response.error || "Extraction failed.");
+                progressBar.style.backgroundColor = '#f87171'; // Turn red
+                uploadBtn.disabled = false;
+                uploadBtn.innerText = 'Upload & Extract';
+            }
+        } else {
+            let errorMsg = "Server error. It might have timed out.";
+            try {
+                errorMsg = JSON.parse(xhr.responseText).error || errorMsg;
+            } catch(e) {}
+            progressText.innerText = "Error: " + errorMsg;
+            progressBar.style.backgroundColor = '#f87171'; // Turn red
+            uploadBtn.disabled = false;
+            uploadBtn.innerText = 'Upload & Extract';
+        }
+    };
+
+    xhr.onerror = function() {
+        progressText.innerText = "Network error occurred.";
+        progressBar.style.backgroundColor = '#f87171';
+        uploadBtn.disabled = false;
+        uploadBtn.innerText = 'Upload & Extract';
+    };
+
+    // Send the file to Python
+    xhr.send(formData);
+});
+</script>
 {% endblock %}
