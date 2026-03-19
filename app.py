@@ -328,7 +328,7 @@ def translate_stream():
                 ],
                 temperature=0.1, 
                 stream=True,
-                max_tokens=8000 
+                max_tokens=65536 
             )
             
             tokens = 0
