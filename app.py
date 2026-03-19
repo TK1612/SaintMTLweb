@@ -301,6 +301,8 @@ def read(book_id, chapter_num):
 
 @app.route("/api/translate", methods=["POST"])
 @login_required
+@app.route("/api/translate", methods=["POST"])
+@login_required
 def translate_stream():
     data = request.json
     chapter_id = data.get('chapter_id')
@@ -310,16 +312,21 @@ def translate_stream():
 
     def generate():
         try:
-            # We enforce strict formatting directly on the user prompt to override chatty behavior
-            enforcer = "\n\n[CRITICAL INSTRUCTION: Output ONLY valid HTML. Do NOT explain your thought process. Do NOT output 'Okay' or any preamble. The VERY FIRST character must be '<'.]"
+            # We enforce strict formatting and explicitly mention short notices
+            enforcer = (
+                "\n\n[CRITICAL INSTRUCTION: The text above may be a short notice, info page, or normal chapter. "
+                "Regardless of the content, you MUST translate it and output ONLY valid HTML. "
+                "Do NOT explain your thought process. Do NOT output 'Okay'. The VERY FIRST character must be '<'.]"
+            )
             
             response = client.chat.completions.create(
                 model="Qwen/Qwen3-14B",
                 messages=[
                     {"role": "system", "content": prompt},
-                    {"role": "user", "content": f"Translate this text:\n\n{chapter.content}{enforcer}"}
+                    # Wrapping the content in markdown HTML blocks forces the AI into "code output" mode
+                    {"role": "user", "content": f"Translate this text:\n\n```html\n{chapter.content}\n```\n{enforcer}"}
                 ],
-                temperature=0.1, # Extremely low temperature kills creativity and preambles
+                temperature=0.1, 
                 stream=True,
                 max_tokens=8000 
             )
@@ -332,20 +339,26 @@ def translate_stream():
                 if chunk.choices and chunk.choices[0].delta.content:
                     text = chunk.choices[0].delta.content
                     
+                    # AI models love to output ```html at the start of code. We strip it so it doesn't show on the website.
+                    text = text.replace("```html", "").replace("```", "")
+                    
                     # THE "GAG ORDER" FILTER: 
-                    # We refuse to send anything to the browser until we see an HTML tag
+                    # We collect the text secretly and refuse to send anything to the browser until we hit an HTML tag.
                     if not started_html:
                         text_buffer += text
                         html_start = text_buffer.find('<')
+                        
                         if html_start != -1:
                             started_html = True
                             text = text_buffer[html_start:] # Cut off all the rambling before the '<'
-                            tokens += 1
-                            yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
+                            if text.strip(): # Only yield if there's actual text left
+                                tokens += 1
+                                yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
                     else:
-                        tokens += 1 
-                        yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
-                        
+                        if text:
+                            tokens += 1 
+                            yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
+                            
             yield f"data: {json.dumps({'text': '', 'tokens': tokens, 'status': 'Completed'})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
