@@ -1,141 +1,65 @@
 {% extends "base.html" %}
+
 {% block content %}
 <style>
-    body { background-color: #fff; margin-bottom: 80px; transition: background-color 0.3s, color 0.3s; }
-    body.dark-mode { background-color: #121212; color: #e0e0e0; }
-    body.dark-mode .bottom-bar { background-color: #1e1e1e; border-top: 1px solid #333; }
-    body.dark-mode .circle-btn { border-color: #444; color: #e0e0e0; }
-    body.dark-mode .circle-btn:hover { background-color: #333; }
-    
-    .reader-content { 
-        max-width: 800px; margin: 40px auto; font-size: 18px; line-height: 1.8; white-space: pre-wrap;
+    /* Light Mode Overrides */
+    body.light-theme {
+        --bg-color: #f4f4f9;
+        --box-bg: #ffffff;
+        --text-color: #000000;
+        --border-color: #dddddd;
     }
     
-    /* Ensure paragraph margins look good */
-    .reader-content p {
-        margin-bottom: 1.5em;
+    .reader-container {
+        font-size: 18px;
+        line-height: 1.6;
+        padding: 30px;
     }
-
-    .status-banner {
-        max-width: 800px; margin: 20px auto; padding: 10px; background: #f1f8ff; border: 1px solid #c8e1ff; 
-        border-radius: 6px; font-size: 14px; color: #0366d6; text-align: center; font-family: monospace;
-    }
-    body.dark-mode .status-banner { background: #1a2a3a; border-color: #2a3a4a; color: #6cb6ff; }
     
-    .bottom-bar {
-        position: fixed; bottom: 0; left: 0; right: 0; background: #fff;
-        border-top: 1px solid #eaeaea; padding: 15px 20px; display: flex;
-        justify-content: space-between; align-items: center; box-shadow: 0 -2px 10px rgba(0,0,0,0.02); z-index: 10;
+    .reader-controls {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
     }
-    .bar-group { display: flex; gap: 10px; align-items: center; }
-    .circle-btn {
-        width: 40px; height: 40px; border-radius: 50%; border: 1px solid #ddd;
-        background: transparent; display: flex; justify-content: center; align-items: center;
-        cursor: pointer; font-size: 16px; color: #333; text-decoration: none;
-    }
-    .circle-btn:hover { background: #f9f9f9; }
-    .circle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    
-    .chapter-info { text-align: center; }
-    .chapter-number { font-size: 12px; color: #888; text-transform: uppercase; margin: 0; }
-    .chapter-title { font-size: 14px; font-weight: bold; margin: 2px 0 0 0; }
 </style>
 
-<div class="reader-content" id="textContent">
-    </div>
-
-<div class="status-banner" id="statusBanner">
-    Status: Preparing / Tokens used: 0
+<div class="reader-controls">
+    <a href="{{ url_for('book_details', book_id=book.id) }}" class="btn-secondary">&larr; Back to Chapters</a>
+    <button id="themeToggle" class="btn-secondary">Switch to Light Mode</button>
 </div>
 
-<div class="bottom-bar">
-    <div class="bar-group">
-        {% if chapter.chapter_number > 1 %}
-        <a href="{{ url_for('read', book_id=book.id, chapter_num=chapter.chapter_number - 1) }}" class="circle-btn">&lt;</a>
-        {% else %}
-        <button class="circle-btn" disabled>&lt;</button>
-        {% endif %}
-        
-        <a href="{{ url_for('index') }}" class="circle-btn">&#8962;</a>
-    </div>
+<div class="box reader-container">
+    <h2>{{ chapter.chapter_title }}</h2>
     
-    <div class="chapter-info">
-        <p class="chapter-number">CHAPTER {{ chapter.chapter_number }} / {{ total }}</p>
-        <p class="chapter-title">{{ book.translated_title }}</p>
+    <div id="content-area">
+        {{ chapter.content | safe }}
     </div>
+</div>
+
+<div class="reader-controls" style="margin-top: 20px;">
+    {% if chapter.chapter_number > 1 %}
+    <a href="{{ url_for('read', book_id=book.id, chapter_num=chapter.chapter_number - 1) }}" class="btn">&larr; Previous</a>
+    {% else %}
+    <div></div>
+    {% endif %}
     
-    <div class="bar-group">
-        <button class="circle-btn" onclick="startTranslation()" title="Retranslate">&#10227;</button>
-        <button class="circle-btn" onclick="document.body.classList.toggle('dark-mode')" title="Toggle Dark Mode">&#9789;</button>
-        
-        {% if chapter.chapter_number < total %}
-        <a href="{{ url_for('read', book_id=book.id, chapter_num=chapter.chapter_number + 1) }}" class="circle-btn">&gt;</a>
-        {% else %}
-        <button class="circle-btn" disabled>&gt;</button>
-        {% endif %}
-    </div>
+    {% if chapter.chapter_number < total %}
+    <a href="{{ url_for('read', book_id=book.id, chapter_num=chapter.chapter_number + 1) }}" class="btn">Next &rarr;</a>
+    {% endif %}
 </div>
 
 <script>
-    const chapterId = {{ chapter.id }};
-    const textContainer = document.getElementById('textContent');
-    const statusBanner = document.getElementById('statusBanner');
-
-    async function startTranslation() {
-        // Reset view for rendering HTML
-        textContainer.innerHTML = "";
-        statusBanner.innerText = "Status: Connecting... / Tokens used: 0";
+    // Theme Toggling Logic
+    const themeBtn = document.getElementById('themeToggle');
+    
+    themeBtn.addEventListener('click', () => {
+        document.body.classList.toggle('light-theme');
         
-        let accumulatedHtml = ""; // Holds the raw HTML stream
-        
-        try {
-            const response = await fetch('/api/translate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chapter_id: chapterId })
-            });
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder("utf-8");
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split('\n');
-                
-                for (let line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const dataStr = line.substring(6).trim();
-                        if (dataStr) {
-                            try {
-                                const data = JSON.parse(dataStr);
-                                if (data.error) {
-                                    statusBanner.innerText = `Status: Error - ${data.error}`;
-                                    return;
-                                }
-                                
-                                // Inject raw HTML tags directly into the browser
-                                accumulatedHtml += data.text;
-                                textContainer.innerHTML = accumulatedHtml; 
-                                
-                                statusBanner.innerText = `Status: ${data.status} / Tokens used: ${data.tokens}`;
-                                
-                                // (Auto-scroll deliberately removed so you can read without interruptions)
-                            } catch (e) {
-                                console.error("Error parsing chunk", e);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (err) {
-            statusBanner.innerText = "Status: Connection Failed. Click retranslate.";
+        if (document.body.classList.contains('light-theme')) {
+            themeBtn.innerText = "Switch to Dark Mode";
+        } else {
+            themeBtn.innerText = "Switch to Light Mode";
         }
-    }
-
-    // Start translation automatically on page load
-    window.onload = startTranslation;
+    });
 </script>
 {% endblock %}
