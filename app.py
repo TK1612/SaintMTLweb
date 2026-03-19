@@ -22,7 +22,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024 
 
-# Ensure static folder exists for uploads
 os.makedirs('static', exist_ok=True)
 
 db = SQLAlchemy(app)
@@ -51,7 +50,6 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(150), nullable=False)
     custom_prompt = db.Column(db.Text, nullable=True)
     is_admin = db.Column(db.Boolean, default=False)
-    # NEW: Store profile picture filename
     profile_pic = db.Column(db.String(255), default='default_profile.png') 
     bookmarks = db.relationship('Bookmark', backref='user', lazy=True)
 
@@ -59,7 +57,6 @@ class Book(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     raw_filename = db.Column(db.String(255), nullable=False)
     translated_title = db.Column(db.String(255), nullable=False)
-    # NEW: Store cover image filename
     cover_image = db.Column(db.String(255), default='default_cover.png') 
     chapters = db.relationship('Chapter', backref='book', lazy=True, cascade="all, delete-orphan")
 
@@ -155,12 +152,10 @@ def index():
 @login_required
 def edit_profile():
     if request.method == 'POST':
-        # Handle Password
         new_password = request.form.get('new_password')
         if new_password:
             current_user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
         
-        # Handle Profile Picture
         if 'profile_pic' in request.files:
             pic = request.files['profile_pic']
             if pic.filename != '':
@@ -207,9 +202,8 @@ def upload():
         
         new_book = Book(raw_filename=raw_filename, translated_title=translated_title)
         db.session.add(new_book)
-        db.session.flush() # Flushes so we can get new_book.id
+        db.session.flush() 
         
-        # --- NEW: Extract ALL Images and rewrite paths ---
         book_folder = os.path.join('static', f'book_{new_book.id}')
         os.makedirs(book_folder, exist_ok=True)
         
@@ -221,7 +215,6 @@ def upload():
                 with open(file_path, 'wb') as f:
                     f.write(item.get_content())
                 
-                # Map the original EPUB path to the new web path
                 web_path = url_for('static', filename=f'book_{new_book.id}/{safe_name}')
                 image_map[item.get_name()] = web_path
                 
@@ -233,7 +226,6 @@ def upload():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 soup = BeautifulSoup(item.get_content(), 'html.parser')
                 
-                # --- NEW: Fix broken image links by replacing with extracted paths ---
                 for img in soup.find_all('img'):
                     src = img.get('src')
                     if src:
@@ -271,51 +263,6 @@ def upload():
         if os.path.exists(filepath):
             os.remove(filepath)
 
-        # --- Extract Cover Image ---
-        cover_image_filename = 'default_cover.png'
-        for item in book.get_items():
-            if item.get_type() == ebooklib.ITEM_COVER or (item.get_type() == ebooklib.ITEM_IMAGE and 'cover' in item.get_name().lower()):
-                ext = item.get_name().split('.')[-1]
-                cover_image_filename = f"cover_{new_book.id}.{ext}"
-                with open(os.path.join('static', cover_image_filename), 'wb') as f:
-                    f.write(item.get_content())
-                break
-        new_book.cover_image = cover_image_filename
-        
-        chapter_num = 1
-        for item in book.get_items():
-            if item.get_type() == ebooklib.ITEM_DOCUMENT:
-                soup = BeautifulSoup(item.get_content(), 'html.parser')
-                
-                body = soup.find('body')
-                if body:
-                    text = body.decode_contents().strip()
-                else:
-                    text = soup.get_text(separator='\n').strip()
-                
-                if len(text) > 200:
-                    chap = Chapter(book_id=new_book.id, chapter_number=chapter_num, chapter_title=f"Chapter {chapter_num}", content=text)
-                    db.session.add(chap)
-                    chapter_num += 1
-                    
-        if chapter_num == 1:
-            raise Exception("No readable text found.")
-            
-        new_bookmark = Bookmark(user_id=current_user.id, book_id=new_book.id, current_chapter_number=1)
-        db.session.add(new_bookmark)
-        db.session.commit()
-        
-        return jsonify({"success": True})
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"UPLOAD CRASHED: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if os.path.exists(filepath):
-            os.remove(filepath)
-
-# --- NEW: Book Details / TOC Page ---
 @app.route("/book/<int:book_id>")
 @login_required
 def book_details(book_id):
