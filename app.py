@@ -1,11 +1,13 @@
 import os
 import time
 import json
+import traceback
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, Response, stream_with_context
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from ebooklib import epub
 from bs4 import BeautifulSoup
 from openai import OpenAI
@@ -151,41 +153,57 @@ def update_profile():
 @login_required
 def upload():
     if 'file' not in request.files:
-        return jsonify({"error": "No file"}), 400
+        return jsonify({"error": "No file uploaded"}), 400
     
     file = request.files['file']
-    raw_filename = file.filename
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    raw_filename = secure_filename(file.filename)
+    filepath = f"temp_{raw_filename}"
     
     try:
-        translated_title = GoogleTranslator(source='auto', target='en').translate(raw_filename)
-    except:
-        translated_title = raw_filename
-    
-    new_book = Book(raw_filename=raw_filename, translated_title=translated_title)
-    db.session.add(new_book)
-    db.session.commit()
-
-    filepath = f"temp_{raw_filename}"
-    file.save(filepath)
-    book = epub.read_epub(filepath)
-    
-    chapter_num = 1
-    for item in book.get_items():
-        if item.get_type() == epub.ITEM_DOCUMENT:
-            soup = BeautifulSoup(item.get_content(), 'html.parser')
-            text = soup.get_text(separator='\n').strip()
-            if len(text) > 200:
-                chap = Chapter(book_id=new_book.id, chapter_number=chapter_num, chapter_title=f"Chapter {chapter_num}", content=text)
-                db.session.add(chap)
-                chapter_num += 1
+        try:
+            translated_title = GoogleTranslator(source='auto', target='en').translate(raw_filename)
+        except:
+            translated_title = raw_filename
+        
+        file.save(filepath)
+        book = epub.read_epub(filepath)
+        
+        new_book = Book(raw_filename=raw_filename, translated_title=translated_title)
+        db.session.add(new_book)
+        db.session.flush() # Securely generates the book.id for the chapters below
+        
+        chapter_num = 1
+        for item in book.get_items():
+            if item.get_type() == epub.ITEM_DOCUMENT:
+                soup = BeautifulSoup(item.get_content(), 'html.parser')
+                text = soup.get_text(separator='\n').strip()
                 
-    # Create initial bookmark
-    new_bookmark = Bookmark(user_id=current_user.id, book_id=new_book.id, current_chapter_number=1)
-    db.session.add(new_bookmark)
-    db.session.commit()
-    os.remove(filepath)
-    
-    return jsonify({"success": True})
+                if len(text) > 200:
+                    chap = Chapter(book_id=new_book.id, chapter_number=chapter_num, chapter_title=f"Chapter {chapter_num}", content=text)
+                    db.session.add(chap)
+                    chapter_num += 1
+                    
+        if chapter_num == 1:
+            raise Exception("No readable text found. The EPUB might be an image dump or improperly formatted.")
+            
+        new_bookmark = Bookmark(user_id=current_user.id, book_id=new_book.id, current_chapter_number=1)
+        db.session.add(new_bookmark)
+        db.session.commit()
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"UPLOAD CRASHED: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+        
+    finally:
+        if os.path.exists(filepath):
+            os.remove(filepath)
 
 @app.route("/read/<int:book_id>/<int:chapter_num>")
 @login_required
@@ -193,7 +211,6 @@ def read(book_id, chapter_num):
     book = Book.query.get_or_404(book_id)
     chapter = Chapter.query.filter_by(book_id=book_id, chapter_number=chapter_num).first_or_404()
     
-    # Update Bookmark
     bm = Bookmark.query.filter_by(user_id=current_user.id, book_id=book_id).first()
     if bm:
         bm.current_chapter_number = chapter_num
@@ -226,7 +243,7 @@ def translate_stream():
             for chunk in response:
                 if chunk.choices and chunk.choices[0].delta.content:
                     text = chunk.choices[0].delta.content
-                    tokens += 1 # Rough token proxy
+                    tokens += 1 
                     yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
             yield f"data: {json.dumps({'text': '', 'tokens': tokens, 'status': 'Completed'})}\n\n"
         except Exception as e:
@@ -246,9 +263,7 @@ def admin():
             return redirect(url_for("admin"))
     return render_template("admin.html", status="offline" if is_offline() else "online")
 
-
-# --- FIX FOR 500 SERVER ERROR ON RENDER ---
-# This ensures the database tables are created when Gunicorn spins up the app
+# Ensures the database tables are created when Gunicorn spins up
 with app.app_context():
     db.create_all()
 
