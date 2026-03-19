@@ -10,56 +10,241 @@
         --border-color: #dddddd;
     }
     
-    .reader-container {
-        font-size: 18px;
-        line-height: 1.6;
-        padding: 30px;
+    body.light-theme .circle-btn {
+        background-color: #e0e0e0;
+        color: #000000;
+        border-color: #cccccc;
+    }
+
+    body.light-theme .circle-btn:hover {
+        background-color: #d0d0d0;
     }
     
-    .reader-controls {
+    .reader-container {
+        font-size: 18px;
+        line-height: 1.8;
+        padding: 30px;
+        margin-bottom: 100px; /* Space for the bottom toolbar */
+    }
+
+    .raw-text {
+        color: #888;
+        font-size: 14px;
+        margin-bottom: 20px;
+        padding: 15px;
+        background-color: rgba(0,0,0,0.2);
+        border-radius: 8px;
+        display: none; /* Hidden by default, can be toggled */
+    }
+
+    body.light-theme .raw-text {
+        background-color: rgba(0,0,0,0.05);
+        color: #555;
+    }
+
+    /* Bottom Navigation Toolbar (from your screenshot) */
+    .bottom-toolbar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: var(--box-bg);
+        border-top: 1px solid var(--border-color);
         display: flex;
         justify-content: space-between;
-        margin-bottom: 20px;
+        align-items: center;
+        padding: 15px 30px;
+        z-index: 100;
+        box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
+    }
+
+    .nav-group {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+
+    .chapter-info {
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .chapter-info .subtext {
+        color: #aaa;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .circle-btn {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        border: 1px solid var(--border-color);
+        background-color: #2a2a2a;
+        color: var(--text-color);
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        text-decoration: none;
+        cursor: pointer;
+        font-size: 18px;
+        transition: 0.2s;
+    }
+
+    .circle-btn:hover {
+        background-color: #3a3a3a;
+    }
+
+    .circle-btn.disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
+    /* Mobile adjustments */
+    @media (max-width: 768px) {
+        .bottom-toolbar { padding: 10px 15px; }
+        .circle-btn { width: 35px; height: 35px; font-size: 16px; }
+        .chapter-info { font-size: 14px; }
     }
 </style>
-
-<div class="reader-controls">
-    <a href="{{ url_for('book_details', book_id=book.id) }}" class="btn-secondary">&larr; Back to Chapters</a>
-    <button id="themeToggle" class="btn-secondary">Switch to Light Mode</button>
-</div>
 
 <div class="box reader-container">
     <h2>{{ chapter.chapter_title }}</h2>
     
-    <div id="content-area">
+    <div id="rawContent" style="display: none;">
         {{ chapter.content | safe }}
+    </div>
+
+    <button onclick="toggleRaw()" class="btn-secondary" style="margin-bottom: 20px; font-size: 12px; padding: 5px 10px;">Show/Hide Raw Korean</button>
+    
+    <div id="rawDisplay" class="raw-text"></div>
+
+    <div id="translationOutput" style="min-height: 200px;">
+        <p style="color: #a855f7; font-style: italic;">Initiating translation with Chutes LLM...</p>
     </div>
 </div>
 
-<div class="reader-controls" style="margin-top: 20px;">
-    {% if chapter.chapter_number > 1 %}
-    <a href="{{ url_for('read', book_id=book.id, chapter_num=chapter.chapter_number - 1) }}" class="btn">&larr; Previous</a>
-    {% else %}
-    <div></div>
-    {% endif %}
-    
-    {% if chapter.chapter_number < total %}
-    <a href="{{ url_for('read', book_id=book.id, chapter_num=chapter.chapter_number + 1) }}" class="btn">Next &rarr;</a>
-    {% endif %}
+<div class="bottom-toolbar">
+    <div class="nav-group">
+        <a href="{% if chapter.chapter_number > 1 %}{{ url_for('read', book_id=book.id, chapter_num=chapter.chapter_number - 1) }}{% else %}#{% endif %}" 
+           class="circle-btn {% if chapter.chapter_number == 1 %}disabled{% endif %}" title="Previous Chapter">&lt;</a>
+        
+        <a href="{{ url_for('book_details', book_id=book.id) }}" class="circle-btn" title="Table of Contents">⌂</a>
+    </div>
+
+    <div class="chapter-info">
+        <span class="subtext">CHAPTER {{ chapter.chapter_number }} / {{ total }}</span>
+        <strong>{{ book.raw_filename }}</strong>
+    </div>
+
+    <div class="nav-group">
+        <button id="retranslateBtn" class="circle-btn" title="Retranslate">↻</button>
+        
+        <button id="themeToggleBtn" class="circle-btn" title="Toggle Light/Dark Mode">☽</button>
+        
+        <a href="{% if chapter.chapter_number < total %}{{ url_for('read', book_id=book.id, chapter_num=chapter.chapter_number + 1) }}{% else %}#{% endif %}" 
+           class="circle-btn {% if chapter.chapter_number == total %}disabled{% endif %}" title="Next Chapter">&gt;</a>
+    </div>
 </div>
 
 <script>
-    // Theme Toggling Logic
-    const themeBtn = document.getElementById('themeToggle');
+    // 1. Clean up those messy <br /> tags from the raw text
+    const rawContentDiv = document.getElementById('rawContent');
+    const rawDisplayDiv = document.getElementById('rawDisplay');
     
+    // Replace literal <br /> text with actual line breaks for the raw view
+    let cleanedRawText = rawContentDiv.innerHTML.replace(/&lt;br\s*\/&gt;|<br\s*\/?>/gi, '<br><br>');
+    rawDisplayDiv.innerHTML = cleanedRawText;
+
+    function toggleRaw() {
+        rawDisplayDiv.style.display = (rawDisplayDiv.style.display === 'none') ? 'block' : 'none';
+    }
+
+    // 2. Light / Dark Mode Toggle Logic
+    const themeBtn = document.getElementById('themeToggleBtn');
+    
+    // Check local storage so it remembers your choice between pages!
+    if (localStorage.getItem('theme') === 'light') {
+        document.body.classList.add('light-theme');
+        themeBtn.innerText = '☀'; // Sun icon for light mode
+    }
+
     themeBtn.addEventListener('click', () => {
         document.body.classList.toggle('light-theme');
-        
         if (document.body.classList.contains('light-theme')) {
-            themeBtn.innerText = "Switch to Dark Mode";
+            localStorage.setItem('theme', 'light');
+            themeBtn.innerText = '☀';
         } else {
-            themeBtn.innerText = "Switch to Light Mode";
+            localStorage.setItem('theme', 'dark');
+            themeBtn.innerText = '☽';
         }
     });
+
+    // 3. The Chutes API Streaming Logic
+    const translationOutput = document.getElementById('translationOutput');
+    const retranslateBtn = document.getElementById('retranslateBtn');
+    let isTranslating = false;
+
+    async function startTranslation() {
+        if (isTranslating) return;
+        isTranslating = true;
+        retranslateBtn.classList.add('disabled');
+        translationOutput.innerHTML = '<p style="color: #a855f7; font-style: italic;">Translating...</p>';
+        
+        try {
+            const response = await fetch("{{ url_for('translate_stream') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chapter_id: {{ chapter.id }} })
+            });
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let done = false;
+            translationOutput.innerHTML = ""; 
+            
+            while (!done) {
+                const { value, done: doneReading } = await reader.read();
+                done = doneReading;
+                const chunkValue = decoder.decode(value);
+                
+                const lines = chunkValue.split('\n\n');
+                for (let line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const dataStr = line.replace('data: ', '').trim();
+                        if (dataStr) {
+                            try {
+                                const data = JSON.parse(dataStr);
+                                if (data.text) {
+                                    // Smoothly render the text as it streams in, converting \n to <br>
+                                    const formattedText = data.text.replace(/\n/g, '<br>');
+                                    translationOutput.innerHTML += formattedText;
+                                }
+                                if (data.error) {
+                                    translationOutput.innerHTML += `<br><br><span style="color:#f87171">Error: ${data.error}</span>`;
+                                }
+                            } catch (e) {
+                                console.error("Error parsing chunk:", e);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            translationOutput.innerHTML += `<br><br><span style="color:#f87171">Connection failed. Please refresh.</span>`;
+        } finally {
+            isTranslating = false;
+            retranslateBtn.classList.remove('disabled');
+        }
+    }
+
+    // Auto-start translation when the page loads
+    window.addEventListener('DOMContentLoaded', startTranslation);
+    
+    // Allow manual re-translation
+    retranslateBtn.addEventListener('click', startTranslation);
 </script>
 {% endblock %}
