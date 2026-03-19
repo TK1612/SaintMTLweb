@@ -2,6 +2,7 @@ import os
 import time
 import json
 import traceback
+import requests
 from urllib.parse import unquote
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, Response, stream_with_context
@@ -147,7 +148,45 @@ def logout():
 @login_required
 def index():
     bookmarks = Bookmark.query.filter_by(user_id=current_user.id).all()
-    return render_template("index.html", active_users_count=len(active_users), bookmarks=bookmarks)
+    
+    # Fetch live Chutes API Usage
+    usage_stats = {
+        "cycle_used": 0.0, "cycle_limit": 50.0, 
+        "window_used": 0.0, "window_limit": 4.1667,
+        "cycle_percent": 0, "window_percent": 0,
+        "cycle_remaining": 50.0, "window_remaining": 4.1667,
+        "has_subscription": True
+    }
+    
+    try:
+        headers = {"Authorization": f"Bearer {CHUTES_API_KEY}"}
+        resp = requests.get("https://api.chutes.ai/users/me/subscription_usage", headers=headers, timeout=3)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("subscription") is False:
+                usage_stats["has_subscription"] = False
+            else:
+                c_used = float(data.get("monthly_usage", 0.0))
+                c_limit = float(data.get("monthly_limit", 50.0))
+                w_used = float(data.get("window_usage", 0.0))
+                w_limit = float(data.get("window_limit", 4.1667))
+                
+                usage_stats.update({
+                    "cycle_used": c_used,
+                    "cycle_limit": c_limit,
+                    "cycle_remaining": max(0, c_limit - c_used),
+                    "cycle_percent": min(100, int((c_used / c_limit) * 100)) if c_limit > 0 else 0,
+                    
+                    "window_used": w_used,
+                    "window_limit": w_limit,
+                    "window_remaining": max(0, w_limit - w_used),
+                    "window_percent": min(100, int((w_used / w_limit) * 100)) if w_limit > 0 else 0
+                })
+    except Exception as e:
+        print(f"Failed to fetch Chutes usage: {e}")
+
+    return render_template("index.html", active_users_count=len(active_users), bookmarks=bookmarks, usage_stats=usage_stats)
 
 @app.route("/edit-profile", methods=['GET', 'POST'])
 @login_required
@@ -301,8 +340,6 @@ def read(book_id, chapter_num):
 
 @app.route("/api/translate", methods=["POST"])
 @login_required
-@app.route("/api/translate", methods=["POST"])
-@login_required
 def translate_stream():
     data = request.json
     chapter_id = data.get('chapter_id')
@@ -312,7 +349,10 @@ def translate_stream():
 
     def generate():
         try:
-            # We enforce strict formatting and explicitly mention short notices
+            import re
+            minified_html = re.sub(r'>\s+<', '><', chapter.content)
+            minified_html = "\n".join([line.strip() for line in minified_html.splitlines() if line.strip()])
+
             enforcer = (
                 "\n\n[CRITICAL INSTRUCTION: The text above may be a short notice, info page, or normal chapter. "
                 "Regardless of the content, you MUST translate it and output ONLY valid HTML. "
@@ -323,12 +363,11 @@ def translate_stream():
                 model="Qwen/Qwen3-14B",
                 messages=[
                     {"role": "system", "content": prompt},
-                    # Wrapping the content in markdown HTML blocks forces the AI into "code output" mode
-                    {"role": "user", "content": f"Translate this text:\n\n```html\n{chapter.content}\n```\n{enforcer}"}
+                    {"role": "user", "content": f"Translate this text:\n\n```html\n{minified_html}\n```\n{enforcer}"}
                 ],
                 temperature=0.1, 
                 stream=True,
-                max_tokens=65536 
+                max_tokens=8000 
             )
             
             tokens = 0
@@ -339,19 +378,16 @@ def translate_stream():
                 if chunk.choices and chunk.choices[0].delta.content:
                     text = chunk.choices[0].delta.content
                     
-                    # AI models love to output ```html at the start of code. We strip it so it doesn't show on the website.
                     text = text.replace("```html", "").replace("```", "")
                     
-                    # THE "GAG ORDER" FILTER: 
-                    # We collect the text secretly and refuse to send anything to the browser until we hit an HTML tag.
                     if not started_html:
                         text_buffer += text
                         html_start = text_buffer.find('<')
                         
                         if html_start != -1:
                             started_html = True
-                            text = text_buffer[html_start:] # Cut off all the rambling before the '<'
-                            if text.strip(): # Only yield if there's actual text left
+                            text = text_buffer[html_start:] 
+                            if text.strip(): 
                                 tokens += 1
                                 yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
                     else:
