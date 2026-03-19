@@ -1,20 +1,20 @@
-<!DOCTYPE html>
-<html>
-<body>
-    <h2>Admin Dashboard</h2>
-    <p>Current Status: <strong>{{ status }}</strong></p>
+{% extends "base.html" %}
+{% block content %}
+<h2>Admin Dashboard</h2>
+<p>Current Status: <strong>{{ status }}</strong></p>
+
+<form method="POST">
+    <label>Admin Password:</label><br>
+    <input type="password" name="password" required><br><br>
     
-    <form method="POST">
-        <label>Admin Password:</label>
-        <input type="password" name="password" required><br><br>
-        
-        <label>Set Website State:</label>
-        <select name="status">
-            <option value="online">Online (Active)</option>
-            <option value="offline">Offline (Disabled)</option>
-        </select><br><br>
-        
-        <button type="submit">Update Status</button>
-    </form>
-</body>
-</html>
+    <label>Set Website State:</label><br>
+    <select name="status">
+        <option value="online" {% if status == 'online' %}selected{% endif %}>Online</option>
+        <option value="offline" {% if status == 'offline' %}selected{% endif %}>Offline</option>
+    </select><br><br>
+    
+    <button type="submit">Update Status</button>
+</form>
+<br>
+<a href="{{ url_for('index') }}">Back to Dashboard</a>
+{% endblock %}
