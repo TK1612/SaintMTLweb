@@ -1,20 +1,40 @@
 {% extends "base.html" %}
-{% block content %}
-<h2>Admin Dashboard</h2>
-<p>Current Status: <strong>{{ status }}</strong></p>
 
-<form method="POST">
-    <label>Admin Password:</label><br>
-    <input type="password" name="password" required><br><br>
+{% block content %}
+<div class="box">
+    <h2>Admin Dashboard</h2>
     
-    <label>Set Website State:</label><br>
-    <select name="status">
-        <option value="online" {% if status == 'online' %}selected{% endif %}>Online</option>
-        <option value="offline" {% if status == 'offline' %}selected{% endif %}>Offline</option>
-    </select><br><br>
+    {% if current_user.is_admin %}
+        <p style="margin-bottom: 25px;">Current Status: 
+            <strong style="color: {% if site_status == 'online' %}#4ade80{% else %}#f87171{% endif %};">
+                {{ site_status | default('online') }}
+            </strong>
+        </p>
+
+        <form action="{{ url_for('update_admin_status') }}" method="POST">
+            <div style="margin-bottom: 15px;">
+                <label for="admin_password" style="display: block; margin-bottom: 8px;">Admin Password:</label>
+                <input type="password" id="admin_password" name="admin_password" style="max-width: 300px;" required>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label for="website_state" style="display: block; margin-bottom: 8px;">Set Website State:</label>
+                <select id="website_state" name="website_state" style="max-width: 150px;">
+                    <option value="Online">Online</option>
+                    <option value="Offline">Offline</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn-secondary">Update Status</button>
+        </form>
+    {% else %}
+        <div style="padding: 20px; background-color: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px;">
+            <p style="color: #f87171; margin: 0;"><strong>Access Denied:</strong> You do not possess site modification abilities.</p>
+        </div>
+    {% endif %}
     
-    <button type="submit">Update Status</button>
-</form>
-<br>
-<a href="{{ url_for('index') }}">Back to Dashboard</a>
+    <div style="margin-top: 30px;">
+        <a href="{{ url_for('dashboard') }}" style="color: #a855f7; text-decoration: none;">&larr; Back to Dashboard</a>
+    </div>
+</div>
 {% endblock %}
