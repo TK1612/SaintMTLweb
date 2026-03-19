@@ -2,6 +2,7 @@ import os
 import time
 import json
 import traceback
+from urllib.parse import unquote
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, Response, stream_with_context
 from flask_sqlalchemy import SQLAlchemy
@@ -209,7 +210,12 @@ def upload():
         
         image_map = {}
         for item in book.get_items():
-            if item.get_type() == ebooklib.ITEM_IMAGE or item.get_type() == ebooklib.ITEM_COVER:
+            item_name = item.get_name().lower()
+            is_img = item.get_type() == ebooklib.ITEM_IMAGE or item.get_type() == ebooklib.ITEM_COVER
+            is_img_ext = item_name.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'))
+            media_type = getattr(item, 'media_type', '') or ""
+            
+            if is_img or is_img_ext or 'image' in media_type:
                 safe_name = secure_filename(item.get_name().replace('/', '_'))
                 file_path = os.path.join(book_folder, safe_name)
                 with open(file_path, 'wb') as f:
@@ -218,7 +224,7 @@ def upload():
                 web_path = url_for('static', filename=f'book_{new_book.id}/{safe_name}')
                 image_map[item.get_name()] = web_path
                 
-                if item.get_type() == ebooklib.ITEM_COVER or 'cover' in item.get_name().lower():
+                if item.get_type() == ebooklib.ITEM_COVER or 'cover' in item_name:
                     new_book.cover_image = f'book_{new_book.id}/{safe_name}'
         
         chapter_num = 1
@@ -226,13 +232,18 @@ def upload():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 soup = BeautifulSoup(item.get_content(), 'html.parser')
                 
-                for img in soup.find_all('img'):
-                    src = img.get('src')
+                for img in soup.find_all(['img', 'image']):
+                    src = img.get('src') or img.get('xlink:href')
                     if src:
-                        base_src_name = src.split('/')[-1]
+                        base_src_name = unquote(src.split('/')[-1])
                         for orig_name, web_path in image_map.items():
-                            if orig_name.endswith(base_src_name):
-                                img['src'] = web_path
+                            if unquote(orig_name).endswith(base_src_name):
+                                if img.name == 'img':
+                                    img['src'] = web_path
+                                else:
+                                    img['xlink:href'] = web_path
+                                if img.get('srcset'):
+                                    del img['srcset']
                                 break
                 
                 body = soup.find('body')
@@ -299,26 +310,42 @@ def translate_stream():
 
     def generate():
         try:
-            # NEW: The Qwen Sledgehammer. We attach this directly to the user's text.
-            qwen_enforcer = "\n\n[CRITICAL SYSTEM COMMAND: Output ONLY the translated HTML. DO NOT output your thought process, reasoning, or any preamble. The very first character of your response MUST be '<'. Start translating immediately.]"
+            # We enforce strict formatting directly on the user prompt to override chatty behavior
+            enforcer = "\n\n[CRITICAL INSTRUCTION: Output ONLY valid HTML. Do NOT explain your thought process. Do NOT output 'Okay' or any preamble. The VERY FIRST character must be '<'.]"
             
             response = client.chat.completions.create(
                 model="Qwen/Qwen3-14B",
                 messages=[
                     {"role": "system", "content": prompt},
-                    # Appended the enforcer right to the end of the text
-                    {"role": "user", "content": f"Text to process:\n\n{chapter.content}{qwen_enforcer}"}
+                    {"role": "user", "content": f"Translate this text:\n\n{chapter.content}{enforcer}"}
                 ],
-                temperature=0.1, # Lowered from 0.3 to kill creative preambles
+                temperature=0.1, # Extremely low temperature kills creativity and preambles
                 stream=True,
                 max_tokens=8000 
             )
+            
             tokens = 0
+            started_html = False
+            text_buffer = ""
+            
             for chunk in response:
                 if chunk.choices and chunk.choices[0].delta.content:
                     text = chunk.choices[0].delta.content
-                    tokens += 1 
-                    yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
+                    
+                    # THE "GAG ORDER" FILTER: 
+                    # We refuse to send anything to the browser until we see an HTML tag
+                    if not started_html:
+                        text_buffer += text
+                        html_start = text_buffer.find('<')
+                        if html_start != -1:
+                            started_html = True
+                            text = text_buffer[html_start:] # Cut off all the rambling before the '<'
+                            tokens += 1
+                            yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
+                    else:
+                        tokens += 1 
+                        yield f"data: {json.dumps({'text': text, 'tokens': tokens, 'status': 'Translating...'})}\n\n"
+                        
             yield f"data: {json.dumps({'text': '', 'tokens': tokens, 'status': 'Completed'})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
