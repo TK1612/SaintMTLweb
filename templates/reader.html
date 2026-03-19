@@ -24,7 +24,30 @@
         font-size: 18px;
         line-height: 1.8;
         padding: 30px;
-        margin-bottom: 100px; /* Space for the bottom toolbar */
+        margin-bottom: 100px;
+    }
+
+    /* Make images responsive */
+    .reader-container img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        margin: 15px 0;
+    }
+
+    /* Status Box Styling */
+    .status-box {
+        background-color: var(--box-bg);
+        border: 1px solid var(--border-color);
+        padding: 12px 20px;
+        border-radius: 8px;
+        margin-bottom: 25px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 14px;
+        font-weight: bold;
+        transition: all 0.3s ease;
     }
 
     .raw-text {
@@ -34,7 +57,7 @@
         padding: 15px;
         background-color: rgba(0,0,0,0.2);
         border-radius: 8px;
-        display: none; /* Hidden by default, can be toggled */
+        display: none;
     }
 
     body.light-theme .raw-text {
@@ -42,7 +65,7 @@
         color: #555;
     }
 
-    /* Bottom Navigation Toolbar (from your screenshot) */
+    /* Bottom Navigation Toolbar */
     .bottom-toolbar {
         position: fixed;
         bottom: 0;
@@ -58,24 +81,11 @@
         box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
     }
 
-    .nav-group {
-        display: flex;
-        gap: 15px;
-        align-items: center;
-    }
-
-    .chapter-info {
-        text-align: center;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .chapter-info .subtext {
-        color: #aaa;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
+    .nav-group { display: flex; gap: 15px; align-items: center; }
+    
+    .chapter-info { text-align: center; display: flex; flex-direction: column; }
+    
+    .chapter-info .subtext { color: #aaa; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
 
     .circle-btn {
         width: 45px;
@@ -93,38 +103,34 @@
         transition: 0.2s;
     }
 
-    .circle-btn:hover {
-        background-color: #3a3a3a;
-    }
+    .circle-btn:hover { background-color: #3a3a3a; }
 
-    .circle-btn.disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
+    .circle-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 
-    /* Mobile adjustments */
     @media (max-width: 768px) {
         .bottom-toolbar { padding: 10px 15px; }
         .circle-btn { width: 35px; height: 35px; font-size: 16px; }
         .chapter-info { font-size: 14px; }
+        .status-box { flex-direction: column; gap: 10px; text-align: center; }
     }
 </style>
 
 <div class="box reader-container">
     <h2>{{ chapter.chapter_title }}</h2>
     
+    <div id="statusBox" class="status-box">
+        <div>Status: <span id="statusText" style="color: #a855f7;">Waiting to Start...</span></div>
+        <div>Tokens Used: <span id="tokenCount">0</span></div>
+    </div>
+
     <div id="rawContent" style="display: none;">
         {{ chapter.content | safe }}
     </div>
 
     <button onclick="toggleRaw()" class="btn-secondary" style="margin-bottom: 20px; font-size: 12px; padding: 5px 10px;">Show/Hide Raw Korean</button>
-    
     <div id="rawDisplay" class="raw-text"></div>
 
-    <div id="translationOutput" style="min-height: 200px;">
-        <p style="color: #a855f7; font-style: italic;">Initiating translation with Chutes LLM...</p>
-    </div>
+    <div id="translationOutput" style="min-height: 200px;"></div>
 </div>
 
 <div class="bottom-toolbar">
@@ -142,7 +148,6 @@
 
     <div class="nav-group">
         <button id="retranslateBtn" class="circle-btn" title="Retranslate">↻</button>
-        
         <button id="themeToggleBtn" class="circle-btn" title="Toggle Light/Dark Mode">☽</button>
         
         <a href="{% if chapter.chapter_number < total %}{{ url_for('read', book_id=book.id, chapter_num=chapter.chapter_number + 1) }}{% else %}#{% endif %}" 
@@ -151,11 +156,9 @@
 </div>
 
 <script>
-    // 1. Clean up those messy <br /> tags from the raw text
     const rawContentDiv = document.getElementById('rawContent');
     const rawDisplayDiv = document.getElementById('rawDisplay');
     
-    // Replace literal <br /> text with actual line breaks for the raw view
     let cleanedRawText = rawContentDiv.innerHTML.replace(/&lt;br\s*\/&gt;|<br\s*\/?>/gi, '<br><br>');
     rawDisplayDiv.innerHTML = cleanedRawText;
 
@@ -163,13 +166,10 @@
         rawDisplayDiv.style.display = (rawDisplayDiv.style.display === 'none') ? 'block' : 'none';
     }
 
-    // 2. Light / Dark Mode Toggle Logic
     const themeBtn = document.getElementById('themeToggleBtn');
-    
-    // Check local storage so it remembers your choice between pages!
     if (localStorage.getItem('theme') === 'light') {
         document.body.classList.add('light-theme');
-        themeBtn.innerText = '☀'; // Sun icon for light mode
+        themeBtn.innerText = '☀';
     }
 
     themeBtn.addEventListener('click', () => {
@@ -183,16 +183,31 @@
         }
     });
 
-    // 3. The Chutes API Streaming Logic
     const translationOutput = document.getElementById('translationOutput');
     const retranslateBtn = document.getElementById('retranslateBtn');
+    
+    // Status Box Elements
+    const statusBox = document.getElementById('statusBox');
+    const statusText = document.getElementById('statusText');
+    const tokenCount = document.getElementById('tokenCount');
+
     let isTranslating = false;
 
     async function startTranslation() {
         if (isTranslating) return;
         isTranslating = true;
         retranslateBtn.classList.add('disabled');
-        translationOutput.innerHTML = '<p style="color: #a855f7; font-style: italic;">Translating...</p>';
+        
+        // Reset Status Box
+        statusBox.style.backgroundColor = 'var(--box-bg)';
+        statusBox.style.borderColor = 'var(--border-color)';
+        statusText.style.color = '#a855f7'; // Purple for active
+        statusText.innerText = 'Translating...';
+        tokenCount.innerText = '0';
+        
+        // Use a buffer string so we don't break HTML tags by inserting them piece-by-piece
+        let fullTranslationText = ""; 
+        translationOutput.innerHTML = ""; 
         
         try {
             const response = await fetch("{{ url_for('translate_stream') }}", {
@@ -204,7 +219,6 @@
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let done = false;
-            translationOutput.innerHTML = ""; 
             
             while (!done) {
                 const { value, done: doneReading } = await reader.read();
@@ -218,11 +232,25 @@
                         if (dataStr) {
                             try {
                                 const data = JSON.parse(dataStr);
+                                
+                                // Buffer the text and update safely to prevent broken DOM tags
                                 if (data.text) {
-                                    // Smoothly render the text as it streams in, converting \n to <br>
-                                    const formattedText = data.text.replace(/\n/g, '<br>');
-                                    translationOutput.innerHTML += formattedText;
+                                    fullTranslationText += data.text;
+                                    translationOutput.innerHTML = fullTranslationText;
                                 }
+                                
+                                // Update Status and Tokens dynamically
+                                if (data.tokens) tokenCount.innerText = data.tokens;
+                                if (data.status) {
+                                    statusText.innerText = data.status;
+                                    if (data.status === 'Completed') {
+                                        // Turn the box green!
+                                        statusBox.style.backgroundColor = 'rgba(74, 222, 128, 0.1)';
+                                        statusBox.style.borderColor = '#4ade80';
+                                        statusText.style.color = '#4ade80';
+                                    }
+                                }
+                                
                                 if (data.error) {
                                     translationOutput.innerHTML += `<br><br><span style="color:#f87171">Error: ${data.error}</span>`;
                                 }
@@ -234,6 +262,8 @@
                 }
             }
         } catch (error) {
+            statusText.innerText = "Connection Failed";
+            statusText.style.color = '#f87171';
             translationOutput.innerHTML += `<br><br><span style="color:#f87171">Connection failed. Please refresh.</span>`;
         } finally {
             isTranslating = false;
@@ -241,10 +271,7 @@
         }
     }
 
-    // Auto-start translation when the page loads
     window.addEventListener('DOMContentLoaded', startTranslation);
-    
-    // Allow manual re-translation
     retranslateBtn.addEventListener('click', startTranslation);
 </script>
 {% endblock %}
