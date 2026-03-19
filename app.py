@@ -300,7 +300,7 @@ def translate_stream():
     def generate():
         try:
             response = client.chat.completions.create(
-                model="deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
+                model="Qwen/Qwen3-14B",
                 messages=[
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": f"Text to process:\n\n{chapter.content}"}
