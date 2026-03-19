@@ -221,6 +221,14 @@ Treat standalone Hanzi as priority vocabulary. Even if Hanzi appears without Kor
 DO NOT leave any characters untranslated.
 
 ═══════════════════════════════════════════════════
+ANTI-PREAMBLE & THOUGHT SUPPRESSION (CRITICAL)
+═══════════════════════════════════════════════════
+You are a direct translation pipeline. You are FORBIDDEN from thinking out loud.
+Do NOT output "Okay, let's start", "Here is the translation", or any reasoning.
+Your VERY FIRST output character MUST be an HTML tag (e.g., <p>, <h1>, <div>). 
+Any English conversational text before the HTML is a critical failure.
+
+═══════════════════════════════════════════════════
 HTML Handling & Tag Integrity (CRITICAL)
 ═══════════════════════════════════════════════════
 Preserve ALL HTML tags EXACTLY as in the original source.
